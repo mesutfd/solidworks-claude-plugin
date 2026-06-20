@@ -1,0 +1,16 @@
+{
+  "id": "solidworks-claude-plugin",
+  "displayName": "SolidWorks Design Assistant",
+  "description": "AI-powered SolidWorks CAD design assistance — sketches, features, assemblies, drawings, and macros — backed by a curated knowledge base.",
+  "category": "CAD / Engineering",
+  "tags": ["solidworks", "cad", "engineering", "3d-modeling", "design"],
+  "author": {
+    "name": "erfouni",
+    "url": ""
+  },
+  "repository": "",
+  "license": "MIT",
+  "version": "0.1.0",
+  "screenshots": [],
+  "installInstructions": "See README.md for setup instructions including knowledge base API configuration."
+}

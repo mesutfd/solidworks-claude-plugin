@@ -1,0 +1,23 @@
+{
+  "name": "solidworks-claude-plugin",
+  "version": "0.1.0",
+  "displayName": "SolidWorks Design Assistant",
+  "description": "A Claude Code plugin that enables AI-assisted SolidWorks CAD design using a curated knowledge base.",
+  "author": "erfouni",
+  "license": "MIT",
+  "entrypoint": "skills/solidworks.md",
+  "capabilities": {
+    "commands": [],
+    "skills": [],
+    "agents": [],
+    "hooks": [],
+    "mcp": false
+  },
+  "knowledgeBase": {
+    "type": "remote",
+    "description": "Remote CAD knowledge base server — connection config lives in .mcp.json"
+  },
+  "engines": {
+    "claudeCode": ">=1.0.0"
+  }
+}

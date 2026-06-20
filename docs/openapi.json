@@ -1,0 +1,1004 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "SolidWorks CAD Knowledge Base API",
+    "version": "1.0.0",
+    "description": "REST API for the SolidWorks CAD knowledge base. Covers part catalog, instructions, macros, known errors, lessons, design sessions, standards lookups, and semantic knowledge recall."
+  },
+  "servers": [
+    { "url": "https://your-kb-host/api/v1", "description": "Production" },
+    { "url": "http://localhost:8000/api/v1", "description": "Local dev" }
+  ],
+  "security": [{ "BearerAuth": [] }],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Token from /data/tokens.json on the server. Set SW_KB_API_KEY env var on the client."
+      }
+    },
+    "schemas": {
+
+      "Category": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "id":          { "type": "string", "format": "uuid", "readOnly": true },
+          "name":        { "type": "string", "example": "Shaft" },
+          "slug":        { "type": "string", "readOnly": true, "example": "shaft" },
+          "parent_id":   { "type": "string", "format": "uuid", "nullable": true, "description": "null = root category" },
+          "description": { "type": "string", "nullable": true },
+          "children":    { "type": "array", "items": { "$ref": "#/components/schemas/Category" }, "readOnly": true },
+          "created_at":  { "type": "string", "format": "date-time", "readOnly": true }
+        }
+      },
+
+      "CategoryCreate": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name":        { "type": "string" },
+          "parent_id":   { "type": "string", "format": "uuid", "nullable": true },
+          "description": { "type": "string", "nullable": true }
+        }
+      },
+
+      "Part": {
+        "type": "object",
+        "required": ["part_number", "name", "category_id"],
+        "properties": {
+          "id":                  { "type": "string", "format": "uuid", "readOnly": true, "description": "Auto-generated on backend" },
+          "part_number":         { "type": "string", "example": "Shaft-M-245", "description": "Unique human-readable identifier. Convention: PRJ-TYPE-NNN" },
+          "name":                { "type": "string", "example": "Drive Shaft M245" },
+          "category_id":         { "type": "string", "format": "uuid" },
+          "tags":                { "type": "array", "items": { "type": "string" }, "default": [], "example": ["steel", "rotating", "transmission"] },
+          "material":            { "type": "string", "nullable": true, "example": "Plain Carbon Steel" },
+          "solidworks_version":  { "type": "string", "nullable": true, "example": "SW2026" },
+          "design_intent":       { "type": "string", "nullable": true, "description": "What this part does / why it exists" },
+          "parameters":          {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true,
+            "description": "Key design dimensions and settings. Values are typically numbers (mm, MPa) or strings (fit classes).",
+            "example": { "shaft_diameter_mm": 12, "length_mm": 100, "tolerance_class": "H7/g6", "surface_finish_um": 1.6 }
+          },
+          "related_parts":       { "type": "array", "items": { "type": "string", "format": "uuid" }, "default": [], "description": "IDs of parts used in the same assembly or derived from this one" },
+          "status":              { "type": "string", "enum": ["draft", "active", "deprecated"], "default": "draft" },
+          "created_at":          { "type": "string", "format": "date-time", "readOnly": true },
+          "updated_at":          { "type": "string", "format": "date-time", "readOnly": true }
+        }
+      },
+
+      "PartCreate": {
+        "type": "object",
+        "required": ["part_number", "name", "category_id"],
+        "properties": {
+          "part_number":         { "type": "string" },
+          "name":                { "type": "string" },
+          "category_id":         { "type": "string", "format": "uuid" },
+          "tags":                { "type": "array", "items": { "type": "string" }, "default": [] },
+          "material":            { "type": "string", "nullable": true },
+          "solidworks_version":  { "type": "string", "nullable": true },
+          "design_intent":       { "type": "string", "nullable": true },
+          "parameters":          { "type": "object", "additionalProperties": true, "nullable": true },
+          "related_parts":       { "type": "array", "items": { "type": "string", "format": "uuid" }, "default": [] },
+          "status":              { "type": "string", "enum": ["draft", "active", "deprecated"], "default": "draft" }
+        }
+      },
+
+      "Instruction": {
+        "type": "object",
+        "required": ["step_number", "title", "body"],
+        "properties": {
+          "id":          { "type": "string", "format": "uuid", "readOnly": true },
+          "part_id":     { "type": "string", "format": "uuid", "readOnly": true },
+          "step_number": { "type": "integer", "minimum": 1, "description": "1-indexed. Order is enforced — reorder via PUT .../reorder" },
+          "title":       { "type": "string", "example": "Create the helix for the thread" },
+          "body":        { "type": "string", "description": "Markdown. Describe exactly what to do in SolidWorks at this step." },
+          "sw_feature":  { "type": "string", "nullable": true, "example": "InsertHelix", "description": "The SolidWorks feature/API call used at this step" },
+          "created_at":  { "type": "string", "format": "date-time", "readOnly": true }
+        }
+      },
+
+      "InstructionCreate": {
+        "type": "object",
+        "required": ["step_number", "title", "body"],
+        "properties": {
+          "step_number": { "type": "integer", "minimum": 1 },
+          "title":       { "type": "string" },
+          "body":        { "type": "string" },
+          "sw_feature":  { "type": "string", "nullable": true }
+        }
+      },
+
+      "InstructionReorderItem": {
+        "type": "object",
+        "required": ["id", "step_number"],
+        "properties": {
+          "id":          { "type": "string", "format": "uuid" },
+          "step_number": { "type": "integer", "minimum": 1 }
+        }
+      },
+
+      "Macro": {
+        "type": "object",
+        "required": ["name", "language", "code"],
+        "properties": {
+          "id":               { "type": "string", "format": "uuid", "readOnly": true },
+          "part_id":          { "type": "string", "format": "uuid", "readOnly": true },
+          "name":             { "type": "string", "example": "build_shaft_m245" },
+          "description":      { "type": "string", "nullable": true },
+          "language":         { "type": "string", "enum": ["vba", "python", "swapi"], "description": "vba = SolidWorks VBA macro (.swb), python = pywin32 COM script, swapi = raw SolidWorks API call sequence" },
+          "code":             { "type": "string", "description": "Full macro source code. Can be VBA, Python (pywin32), or a sequence of SWAPI calls." },
+          "sw_features_used": { "type": "array", "items": { "type": "string" }, "default": [], "example": ["InsertHelix", "InsertCutSwept4", "FeatureExtrusion3"], "description": "SolidWorks features or API methods called by this macro" },
+          "parameters":       {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true,
+            "description": "Configurable variables the caller can override before running the macro.",
+            "example": { "shaft_diameter_mm": 12, "thread_pitch_mm": 1.25, "length_mm": 100 }
+          },
+          "is_template":      { "type": "boolean", "default": false, "description": "True if this macro is a reusable template (not tied to one specific part instance)" },
+          "version":          { "type": "string", "nullable": true, "default": "1.0.0" },
+          "created_at":       { "type": "string", "format": "date-time", "readOnly": true },
+          "updated_at":       { "type": "string", "format": "date-time", "readOnly": true }
+        }
+      },
+
+      "MacroCreate": {
+        "type": "object",
+        "required": ["name", "language", "code"],
+        "properties": {
+          "name":             { "type": "string" },
+          "description":      { "type": "string", "nullable": true },
+          "language":         { "type": "string", "enum": ["vba", "python", "swapi"] },
+          "code":             { "type": "string" },
+          "sw_features_used": { "type": "array", "items": { "type": "string" }, "default": [] },
+          "parameters":       { "type": "object", "additionalProperties": true, "nullable": true },
+          "is_template":      { "type": "boolean", "default": false },
+          "version":          { "type": "string", "nullable": true }
+        }
+      },
+
+      "KnownError": {
+        "type": "object",
+        "required": ["title", "description"],
+        "properties": {
+          "id":          { "type": "string", "format": "uuid", "readOnly": true },
+          "part_id":     { "type": "string", "format": "uuid", "nullable": true, "description": "null = error is global (not part-specific)" },
+          "error_code":  { "type": "string", "nullable": true, "example": "CAD-EXT-001", "description": "Internal reference code matching lessons-learned.md refs" },
+          "title":       { "type": "string", "example": "Self-intersecting sketch extrudes to nothing" },
+          "description": { "type": "string" },
+          "sw_feature":  { "type": "string", "nullable": true, "example": "FeatureExtrusion3", "description": "SolidWorks feature or API method that triggered the error" },
+          "resolution":  { "type": "string", "nullable": true, "description": "Exact fix / workaround" },
+          "is_resolved": { "type": "boolean", "default": false },
+          "severity":    { "type": "string", "enum": ["low", "medium", "high", "critical"], "default": "medium" },
+          "created_at":  { "type": "string", "format": "date-time", "readOnly": true },
+          "updated_at":  { "type": "string", "format": "date-time", "readOnly": true }
+        }
+      },
+
+      "KnownErrorCreate": {
+        "type": "object",
+        "required": ["title", "description"],
+        "properties": {
+          "error_code":  { "type": "string", "nullable": true },
+          "title":       { "type": "string" },
+          "description": { "type": "string" },
+          "sw_feature":  { "type": "string", "nullable": true },
+          "resolution":  { "type": "string", "nullable": true },
+          "is_resolved": { "type": "boolean", "default": false },
+          "severity":    { "type": "string", "enum": ["low", "medium", "high", "critical"], "default": "medium" }
+        }
+      },
+
+      "UserCorrection": {
+        "type": "object",
+        "required": ["field", "original", "corrected"],
+        "properties": {
+          "field":     { "type": "string", "description": "What was wrong — e.g. 'thread_depth', 'extrude_direction', 'mate_type'" },
+          "original":  { "type": "string", "description": "What Claude produced" },
+          "corrected": { "type": "string", "description": "What the user changed it to" }
+        }
+      },
+
+      "Session": {
+        "type": "object",
+        "required": ["part_id"],
+        "properties": {
+          "id":               { "type": "string", "format": "uuid", "readOnly": true },
+          "part_id":          { "type": "string", "format": "uuid" },
+          "status":           { "type": "string", "enum": ["in_progress", "completed", "failed"], "default": "in_progress" },
+          "feature_sequence": {
+            "type": "array",
+            "items": { "type": "string" },
+            "default": [],
+            "description": "Ordered list of SolidWorks features applied during this session. Order matters — SolidWorks rebuild depends on it.",
+            "example": ["new_part", "InsertSketch", "FeatureExtrusion3", "InsertHelix", "InsertCutSwept4", "apply_material", "save_as"]
+          },
+          "kb_docs_queried":  {
+            "type": "array",
+            "items": { "type": "string" },
+            "default": [],
+            "description": "Source IDs of knowledge base documents or tool calls used during this session",
+            "example": ["recall_knowledge:thread", "lesson:CAD-THR-001", "material:Plain Carbon Steel"]
+          },
+          "potential_issues": {
+            "type": "array",
+            "items": { "type": "string" },
+            "default": [],
+            "description": "Known risks or pitfalls for this part / session outcome",
+            "example": ["Blind cut may fail if sketch plane is on the boundary face", "Thread feature API broken in SW2026 — use helix+swept cut"]
+          },
+          "iterations_needed": { "type": "integer", "nullable": true, "minimum": 1, "description": "How many rounds of correction before the model was acceptable" },
+          "user_rating":       { "type": "integer", "nullable": true, "minimum": 1, "maximum": 5, "description": "User satisfaction with Claude's output (1=unusable, 5=perfect)" },
+          "user_corrections":  {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/UserCorrection" },
+            "default": [],
+            "description": "Every fix the user had to make after Claude's output. This is the primary training signal."
+          },
+          "started_at":        { "type": "string", "format": "date-time", "readOnly": true },
+          "completed_at":      { "type": "string", "format": "date-time", "nullable": true }
+        }
+      },
+
+      "SessionCreate": {
+        "type": "object",
+        "required": ["part_id"],
+        "properties": {
+          "part_id": { "type": "string", "format": "uuid" }
+        }
+      },
+
+      "SessionUpdate": {
+        "type": "object",
+        "properties": {
+          "status":            { "type": "string", "enum": ["in_progress", "completed", "failed"] },
+          "feature_sequence":  { "type": "array", "items": { "type": "string" } },
+          "kb_docs_queried":   { "type": "array", "items": { "type": "string" } },
+          "potential_issues":  { "type": "array", "items": { "type": "string" } },
+          "iterations_needed": { "type": "integer", "minimum": 1 },
+          "user_rating":       { "type": "integer", "minimum": 1, "maximum": 5 },
+          "user_corrections":  { "type": "array", "items": { "$ref": "#/components/schemas/UserCorrection" } },
+          "completed_at":      { "type": "string", "format": "date-time" }
+        }
+      },
+
+      "Lesson": {
+        "type": "object",
+        "required": ["title", "what_happened", "root_cause", "prevention", "category", "severity"],
+        "properties": {
+          "id":               { "type": "string", "format": "uuid", "readOnly": true },
+          "part_id":          { "type": "string", "format": "uuid", "nullable": true },
+          "category":         { "type": "string", "example": "modeling/API", "description": "Matches the design_rules category taxonomy: tolerance, fastener, dfm, modeling/API, assembly/API, session/API, verification, workflow" },
+          "title":            { "type": "string" },
+          "what_happened":    { "type": "string" },
+          "root_cause":       { "type": "string" },
+          "prevention":       { "type": "string" },
+          "severity":         { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+          "ref_code":         { "type": "string", "nullable": true, "example": "CAD-EXT-001" },
+          "creates_rule":     { "type": "boolean", "default": false, "description": "If true, also inserts an enforceable design rule into the standards DB" },
+          "rule_check_type":  { "type": "string", "nullable": true, "description": "Required when creates_rule=true: max_tolerance_class_when | min_value | prefer_series | hole_matches_fastener" },
+          "rule_parameters":  { "type": "object", "additionalProperties": true, "nullable": true },
+          "created_at":       { "type": "string", "format": "date-time", "readOnly": true }
+        }
+      },
+
+      "LessonCreate": {
+        "type": "object",
+        "required": ["title", "what_happened", "root_cause", "prevention", "category", "severity"],
+        "properties": {
+          "part_id":         { "type": "string", "format": "uuid", "nullable": true },
+          "category":        { "type": "string" },
+          "title":           { "type": "string" },
+          "what_happened":   { "type": "string" },
+          "root_cause":      { "type": "string" },
+          "prevention":      { "type": "string" },
+          "severity":        { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+          "ref_code":        { "type": "string", "nullable": true },
+          "creates_rule":    { "type": "boolean", "default": false },
+          "rule_check_type": { "type": "string", "nullable": true },
+          "rule_parameters": { "type": "object", "additionalProperties": true, "nullable": true }
+        }
+      },
+
+      "DesignRule": {
+        "type": "object",
+        "required": ["rule_code", "category", "description"],
+        "properties": {
+          "id":                 { "type": "integer", "readOnly": true },
+          "rule_code":          { "type": "string", "example": "WLD-001" },
+          "category":           { "type": "string", "example": "tolerance" },
+          "description":        { "type": "string" },
+          "severity":           { "type": "string", "enum": ["low", "medium", "high", "critical"], "default": "medium" },
+          "standard_reference": { "type": "string", "nullable": true },
+          "check_type":         { "type": "string", "nullable": true, "enum": ["max_tolerance_class_when", "min_value", "prefer_series", "hole_matches_fastener", ""], "description": "Determines how check_context evaluates this rule automatically" },
+          "parameters":         { "type": "object", "additionalProperties": true, "nullable": true },
+          "source":             { "type": "string", "default": "user", "description": "seed | lesson:<title> | user" },
+          "created_at":         { "type": "string", "format": "date-time", "readOnly": true }
+        }
+      },
+
+      "CheckContextRequest": {
+        "type": "object",
+        "description": "Any keys are optional. Pass what you know; rules that need a missing key are skipped.",
+        "properties": {
+          "welded":               { "type": "boolean" },
+          "tolerance_class":      { "type": "string", "example": "f" },
+          "process":              { "type": "string", "example": "machined_aluminum" },
+          "wall_thickness_mm":    { "type": "number" },
+          "nominal_dimension_mm": { "type": "number" },
+          "fastener":             { "type": "string", "example": "M8" },
+          "hole_mm":              { "type": "number" }
+        },
+        "additionalProperties": true
+      },
+
+      "KnowledgeRecallResult": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind":    { "type": "string", "example": "lesson" },
+                "score":   { "type": "number" },
+                "title":   { "type": "string" },
+                "content": { "type": "string" }
+              }
+            }
+          }
+        }
+      },
+
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error":   { "type": "string" },
+          "detail":  { "type": "string" }
+        }
+      }
+    },
+
+    "parameters": {
+      "partId": {
+        "name": "part_id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "format": "uuid" }
+      },
+      "resourceId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "format": "uuid" }
+      }
+    },
+
+    "responses": {
+      "401": {
+        "description": "Missing or invalid Bearer token",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      },
+      "404": {
+        "description": "Resource not found",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      }
+    }
+  },
+
+  "paths": {
+
+    "/categories": {
+      "get": {
+        "summary": "List categories",
+        "operationId": "listCategories",
+        "parameters": [
+          { "name": "parent_id", "in": "query", "schema": { "type": "string", "format": "uuid" }, "description": "Filter by parent. Omit for root categories." },
+          { "name": "flat",      "in": "query", "schema": { "type": "boolean", "default": false }, "description": "Return flat list instead of tree" }
+        ],
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Category" } } } } },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      },
+      "post": {
+        "summary": "Create category",
+        "operationId": "createCategory",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CategoryCreate" } } } },
+        "responses": {
+          "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Category" } } } },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      }
+    },
+
+    "/categories/{id}": {
+      "get": {
+        "summary": "Get category (with children)",
+        "operationId": "getCategory",
+        "parameters": [{ "$ref": "#/components/parameters/resourceId" }],
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Category" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "patch": {
+        "summary": "Update category",
+        "operationId": "updateCategory",
+        "parameters": [{ "$ref": "#/components/parameters/resourceId" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CategoryCreate" } } } },
+        "responses": {
+          "200": { "description": "Updated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Category" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      }
+    },
+
+    "/parts": {
+      "get": {
+        "summary": "List parts",
+        "operationId": "listParts",
+        "parameters": [
+          { "name": "category_id", "in": "query", "schema": { "type": "string", "format": "uuid" } },
+          { "name": "tags",        "in": "query", "schema": { "type": "array", "items": { "type": "string" } }, "style": "form", "explode": true },
+          { "name": "status",      "in": "query", "schema": { "type": "string", "enum": ["draft", "active", "deprecated"] } },
+          { "name": "q",           "in": "query", "schema": { "type": "string" }, "description": "Full-text search on part_number, name, design_intent" },
+          { "name": "page",        "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "per_page",    "in": "query", "schema": { "type": "integer", "default": 20, "maximum": 100 } }
+        ],
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Part" } } } } },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      },
+      "post": {
+        "summary": "Create part (id auto-generated on backend)",
+        "operationId": "createPart",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PartCreate" } } } },
+        "responses": {
+          "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Part" } } } },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      }
+    },
+
+    "/parts/{id}": {
+      "get": {
+        "summary": "Get part with full detail",
+        "operationId": "getPart",
+        "parameters": [{ "$ref": "#/components/parameters/resourceId" }],
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Part" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "patch": {
+        "summary": "Update part",
+        "operationId": "updatePart",
+        "parameters": [{ "$ref": "#/components/parameters/resourceId" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PartCreate" } } } },
+        "responses": {
+          "200": { "description": "Updated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Part" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "delete": {
+        "summary": "Soft-delete part (status → deprecated)",
+        "operationId": "deletePart",
+        "parameters": [{ "$ref": "#/components/parameters/resourceId" }],
+        "responses": {
+          "200": { "description": "Deprecated" },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      }
+    },
+
+    "/parts/{part_id}/instructions": {
+      "get": {
+        "summary": "List instructions for a part (ordered by step_number)",
+        "operationId": "listInstructions",
+        "parameters": [{ "$ref": "#/components/parameters/partId" }],
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Instruction" } } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "post": {
+        "summary": "Add one instruction to a part",
+        "operationId": "createInstruction",
+        "parameters": [{ "$ref": "#/components/parameters/partId" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/InstructionCreate" } } } },
+        "responses": {
+          "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Instruction" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      }
+    },
+
+    "/parts/{part_id}/instructions/bulk": {
+      "post": {
+        "summary": "Add multiple instructions at once (replaces existing if step_number conflicts)",
+        "operationId": "bulkCreateInstructions",
+        "parameters": [{ "$ref": "#/components/parameters/partId" }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/InstructionCreate" } } } }
+        },
+        "responses": {
+          "201": { "description": "Created", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Instruction" } } } } },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      }
+    },
+
+    "/parts/{part_id}/instructions/reorder": {
+      "put": {
+        "summary": "Reorder instructions (pass full ordered array of {id, step_number})",
+        "operationId": "reorderInstructions",
+        "parameters": [{ "$ref": "#/components/parameters/partId" }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/InstructionReorderItem" } } } }
+        },
+        "responses": {
+          "200": { "description": "Reordered" },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      }
+    },
+
+    "/instructions/{id}": {
+      "patch": {
+        "summary": "Update an instruction",
+        "operationId": "updateInstruction",
+        "parameters": [{ "$ref": "#/components/parameters/resourceId" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/InstructionCreate" } } } },
+        "responses": {
+          "200": { "description": "Updated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Instruction" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "delete": {
+        "summary": "Delete an instruction",
+        "operationId": "deleteInstruction",
+        "parameters": [{ "$ref": "#/components/parameters/resourceId" }],
+        "responses": {
+          "204": { "description": "Deleted" },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      }
+    },
+
+    "/parts/{part_id}/macros": {
+      "get": {
+        "summary": "List macros for a part",
+        "operationId": "listMacrosForPart",
+        "parameters": [{ "$ref": "#/components/parameters/partId" }],
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Macro" } } } } },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      },
+      "post": {
+        "summary": "Create a macro for a part",
+        "operationId": "createMacro",
+        "parameters": [{ "$ref": "#/components/parameters/partId" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MacroCreate" } } } },
+        "responses": {
+          "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Macro" } } } },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      }
+    },
+
+    "/macros": {
+      "get": {
+        "summary": "Search macros globally",
+        "operationId": "listMacros",
+        "parameters": [
+          { "name": "language",    "in": "query", "schema": { "type": "string", "enum": ["vba", "python", "swapi"] } },
+          { "name": "is_template", "in": "query", "schema": { "type": "boolean" } },
+          { "name": "q",           "in": "query", "schema": { "type": "string" }, "description": "Search name, description, sw_features_used" }
+        ],
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Macro" } } } } },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      }
+    },
+
+    "/macros/{id}": {
+      "get": {
+        "summary": "Get macro with full code",
+        "operationId": "getMacro",
+        "parameters": [{ "$ref": "#/components/parameters/resourceId" }],
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Macro" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "patch": {
+        "summary": "Update a macro",
+        "operationId": "updateMacro",
+        "parameters": [{ "$ref": "#/components/parameters/resourceId" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MacroCreate" } } } },
+        "responses": {
+          "200": { "description": "Updated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Macro" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "delete": {
+        "summary": "Delete a macro",
+        "operationId": "deleteMacro",
+        "parameters": [{ "$ref": "#/components/parameters/resourceId" }],
+        "responses": {
+          "204": { "description": "Deleted" },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      }
+    },
+
+    "/parts/{part_id}/errors": {
+      "get": {
+        "summary": "List known errors for a part",
+        "operationId": "listErrorsForPart",
+        "parameters": [
+          { "$ref": "#/components/parameters/partId" },
+          { "name": "severity",    "in": "query", "schema": { "type": "string", "enum": ["low", "medium", "high", "critical"] } },
+          { "name": "is_resolved", "in": "query", "schema": { "type": "boolean" } }
+        ],
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/KnownError" } } } } },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      },
+      "post": {
+        "summary": "Log a known error for a part",
+        "operationId": "createErrorForPart",
+        "parameters": [{ "$ref": "#/components/parameters/partId" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/KnownErrorCreate" } } } },
+        "responses": {
+          "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/KnownError" } } } },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      }
+    },
+
+    "/errors": {
+      "get": {
+        "summary": "Search known errors globally",
+        "operationId": "listErrors",
+        "parameters": [
+          { "name": "severity",    "in": "query", "schema": { "type": "string", "enum": ["low", "medium", "high", "critical"] } },
+          { "name": "sw_feature",  "in": "query", "schema": { "type": "string" } },
+          { "name": "is_resolved", "in": "query", "schema": { "type": "boolean" } },
+          { "name": "q",           "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/KnownError" } } } } },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      },
+      "post": {
+        "summary": "Log a global error (not tied to a specific part)",
+        "operationId": "createGlobalError",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/KnownErrorCreate" } } } },
+        "responses": {
+          "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/KnownError" } } } },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      }
+    },
+
+    "/errors/{id}": {
+      "patch": {
+        "summary": "Update a known error (add resolution, change severity)",
+        "operationId": "updateError",
+        "parameters": [{ "$ref": "#/components/parameters/resourceId" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/KnownErrorCreate" } } } },
+        "responses": {
+          "200": { "description": "Updated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/KnownError" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      }
+    },
+
+    "/sessions": {
+      "post": {
+        "summary": "Start a design session",
+        "operationId": "createSession",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SessionCreate" } } } },
+        "responses": {
+          "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Session" } } } },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      }
+    },
+
+    "/sessions/{id}": {
+      "get": {
+        "summary": "Get a session",
+        "operationId": "getSession",
+        "parameters": [{ "$ref": "#/components/parameters/resourceId" }],
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Session" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      },
+      "patch": {
+        "summary": "Update session (append corrections, set rating, update feature_sequence, etc.)",
+        "operationId": "updateSession",
+        "parameters": [{ "$ref": "#/components/parameters/resourceId" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SessionUpdate" } } } },
+        "responses": {
+          "200": { "description": "Updated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Session" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      }
+    },
+
+    "/sessions/{id}/complete": {
+      "post": {
+        "summary": "Complete a session — finalises data and triggers knowledge base update (auto-records lessons from corrections)",
+        "operationId": "completeSession",
+        "parameters": [{ "$ref": "#/components/parameters/resourceId" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "user_rating":      { "type": "integer", "minimum": 1, "maximum": 5 },
+                  "user_corrections": { "type": "array", "items": { "$ref": "#/components/schemas/UserCorrection" } },
+                  "potential_issues": { "type": "array", "items": { "type": "string" } },
+                  "feature_sequence": { "type": "array", "items": { "type": "string" } }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Session completed and KB updated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Session" } } } },
+          "401": { "$ref": "#/components/responses/401" },
+          "404": { "$ref": "#/components/responses/404" }
+        }
+      }
+    },
+
+    "/parts/{part_id}/sessions": {
+      "get": {
+        "summary": "Get all sessions for a part",
+        "operationId": "listSessionsForPart",
+        "parameters": [{ "$ref": "#/components/parameters/partId" }],
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Session" } } } } },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      }
+    },
+
+    "/lessons": {
+      "get": {
+        "summary": "List lessons learned",
+        "operationId": "listLessons",
+        "parameters": [
+          { "name": "category", "in": "query", "schema": { "type": "string" } },
+          { "name": "severity", "in": "query", "schema": { "type": "string", "enum": ["low", "medium", "high", "critical"] } },
+          { "name": "part_id",  "in": "query", "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Lesson" } } } } },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      },
+      "post": {
+        "summary": "Record a lesson learned (wraps record_lesson; optionally creates an enforceable design rule)",
+        "operationId": "createLesson",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LessonCreate" } } } },
+        "responses": {
+          "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Lesson" } } } },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      }
+    },
+
+    "/parts/{part_id}/lessons": {
+      "get": {
+        "summary": "List lessons for a specific part",
+        "operationId": "listLessonsForPart",
+        "parameters": [{ "$ref": "#/components/parameters/partId" }],
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Lesson" } } } } },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      }
+    },
+
+    "/knowledge/recall": {
+      "get": {
+        "summary": "Semantic recall — find the most relevant past knowledge by meaning",
+        "operationId": "recallKnowledge",
+        "parameters": [
+          { "name": "query", "in": "query", "required": true, "schema": { "type": "string" }, "example": "helix swept cut thread M8" },
+          { "name": "k",     "in": "query", "schema": { "type": "integer", "default": 5, "maximum": 20 } },
+          { "name": "kinds", "in": "query", "schema": { "type": "array", "items": { "type": "string", "enum": ["lesson", "rule", "strategy", "playbook", "document", "convention"] } }, "style": "form", "explode": true }
+        ],
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/KnowledgeRecallResult" } } } },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      }
+    },
+
+    "/knowledge/ingest": {
+      "post": {
+        "summary": "Ingest a document into the knowledge base (re-ingesting the same source replaces it)",
+        "operationId": "ingestDocument",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["source", "text"],
+                "properties": {
+                  "source": { "type": "string", "description": "Stable unique ID for this document — used for updates/deletion", "example": "ref:reading-engineering-drawings" },
+                  "text":   { "type": "string" },
+                  "title":  { "type": "string", "nullable": true }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Ingested" },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      }
+    },
+
+    "/knowledge/{source}": {
+      "delete": {
+        "summary": "Remove a document from the knowledge base",
+        "operationId": "forgetDocument",
+        "parameters": [{ "name": "source", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Removed" },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      }
+    },
+
+    "/knowledge/reindex": {
+      "post": {
+        "summary": "Rebuild the semantic index (run after bulk edits to lessons/rules)",
+        "operationId": "reindexKnowledge",
+        "responses": {
+          "200": { "description": "Reindexed" },
+          "401": { "$ref": "#/components/responses/401" }
+        }
+      }
+    },
+
+    "/standards/materials": {
+      "get": {
+        "summary": "List materials",
+        "operationId": "listMaterials",
+        "parameters": [{ "name": "type", "in": "query", "schema": { "type": "string", "enum": ["steel", "stainless", "aluminum", "titanium", "copper_alloy", "cast_iron"] } }],
+        "responses": { "200": { "description": "OK" }, "401": { "$ref": "#/components/responses/401" } }
+      }
+    },
+
+    "/standards/materials/{name}": {
+      "get": {
+        "summary": "Get material properties (yield/ultimate MPa, density, modulus, Poisson, CTE)",
+        "operationId": "getMaterial",
+        "parameters": [{ "name": "name", "in": "path", "required": true, "schema": { "type": "string" }, "example": "6061" }],
+        "responses": { "200": { "description": "OK" }, "401": { "$ref": "#/components/responses/401" }, "404": { "$ref": "#/components/responses/404" } }
+      }
+    },
+
+    "/standards/fasteners/{designation}": {
+      "get": {
+        "summary": "Fastener geometry (pitch, head width, head height) for M8, M10…",
+        "operationId": "getFastener",
+        "parameters": [
+          { "name": "designation",   "in": "path", "required": true, "schema": { "type": "string" }, "example": "M8" },
+          { "name": "fastener_type", "in": "query", "schema": { "type": "string", "enum": ["hex_bolt", "socket_head_cap_screw"] } }
+        ],
+        "responses": { "200": { "description": "OK" }, "401": { "$ref": "#/components/responses/401" } }
+      }
+    },
+
+    "/standards/clearance-holes/{designation}": {
+      "get": {
+        "summary": "ISO 273 bolt clearance hole diameter",
+        "operationId": "getClearanceHole",
+        "parameters": [
+          { "name": "designation", "in": "path", "required": true, "schema": { "type": "string" }, "example": "M8" },
+          { "name": "fit",         "in": "query", "schema": { "type": "string", "enum": ["close", "normal", "loose"], "default": "normal" } }
+        ],
+        "responses": { "200": { "description": "OK" }, "401": { "$ref": "#/components/responses/401" } }
+      }
+    },
+
+    "/standards/fits": {
+      "get": {
+        "summary": "ISO 286 limits & fits — deviations and min/max clearance",
+        "operationId": "getFit",
+        "parameters": [
+          { "name": "hole",    "in": "query", "required": true, "schema": { "type": "string" }, "example": "H7" },
+          { "name": "shaft",   "in": "query", "required": true, "schema": { "type": "string" }, "example": "g6" },
+          { "name": "nominal", "in": "query", "required": true, "schema": { "type": "number" }, "example": 12 }
+        ],
+        "responses": { "200": { "description": "OK" }, "401": { "$ref": "#/components/responses/401" } }
+      }
+    },
+
+    "/standards/tolerances": {
+      "get": {
+        "summary": "ISO 2768-1 general tolerance",
+        "operationId": "getTolerance",
+        "parameters": [
+          { "name": "class",   "in": "query", "required": true, "schema": { "type": "string", "enum": ["f", "m", "c", "v"] } },
+          { "name": "nominal", "in": "query", "required": true, "schema": { "type": "number" } },
+          { "name": "kind",    "in": "query", "schema": { "type": "string", "enum": ["linear", "angular"], "default": "linear" } }
+        ],
+        "responses": { "200": { "description": "OK" }, "401": { "$ref": "#/components/responses/401" } }
+      }
+    },
+
+    "/standards/design-rules": {
+      "get": {
+        "summary": "List enforceable design rules",
+        "operationId": "listDesignRules",
+        "parameters": [{ "name": "category", "in": "query", "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/DesignRule" } } } } }, "401": { "$ref": "#/components/responses/401" } }
+      },
+      "post": {
+        "summary": "Add or update an enforceable design rule",
+        "operationId": "createDesignRule",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DesignRule" } } } },
+        "responses": { "201": { "description": "Created/Updated" }, "401": { "$ref": "#/components/responses/401" } }
+      }
+    },
+
+    "/standards/check-context": {
+      "post": {
+        "summary": "Run all design rules against a context and get pass/warn/fail per rule",
+        "operationId": "checkContext",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CheckContextRequest" } } } },
+        "responses": { "200": { "description": "OK" }, "401": { "$ref": "#/components/responses/401" } }
+      }
+    },
+
+    "/health": {
+      "get": {
+        "summary": "Health check (no auth required)",
+        "operationId": "health",
+        "security": [],
+        "responses": { "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "object", "properties": { "status": { "type": "string" }, "service": { "type": "string" } } } } } } }
+      }
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "solidworks-kb": {
+      "description": "SolidWorks CAD knowledge base — provides design references, macro templates, feature documentation, and best practices.",
+      "type": "http",
+      "url": "http://KNOWLEDGE_BASE_HOST/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY"
+      },
+      "env": {
+        "SW_KB_HOST": "KNOWLEDGE_BASE_HOST",
+        "SW_KB_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}

@@ -1,0 +1,19 @@
+# Environment / secrets
+.env
+.env.local
+*.env
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Keep placeholder dirs tracked
+!commands/.gitkeep
+!agents/.gitkeep
+!skills/.gitkeep
+!hooks/.gitkeep
