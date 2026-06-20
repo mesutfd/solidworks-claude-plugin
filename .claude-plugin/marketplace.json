@@ -5,10 +5,10 @@
   "category": "CAD / Engineering",
   "tags": ["solidworks", "cad", "engineering", "3d-modeling", "design"],
   "author": {
-    "name": "erfouni",
-    "url": ""
+    "name": "mesutfd",
+    "url": "https://github.com/mesutfd"
   },
-  "repository": "",
+  "repository": "https://github.com/mesutfd/solidworks-claude-plugin",
   "license": "MIT",
   "version": "0.1.0",
   "screenshots": [],
