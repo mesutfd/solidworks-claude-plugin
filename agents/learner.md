@@ -1,268 +1,308 @@
 ---
 name: learner
 description: >
-  Analyzes the full conversation, extracts SolidWorks knowledge, and builds
-  a unified payload. Runs before session-reporter in the pipeline. Can run
-  multiple times in one conversation — each run rebuilds the complete current
-  state from scratch and produces an updated payload. Handles both CREATE
-  (first send) and UPDATE (subsequent sends) against the backend.
+  Analyzes the full conversation and builds a FeedbackSubmission payload
+  matching the backend API schema exactly. Runs before session-reporter.
+  Can run multiple times — each run rebuilds the complete current state.
+  Handles part lookup to attach partId when possible.
 trigger: pipeline
 called_by: session-reporter
 ---
 
 # Learner Agent
 
-You are a knowledge extraction agent. Your job is to read the full conversation
-and produce a single, complete, structured payload of everything worth storing
-in the SolidWorks knowledge base.
-
-You run BEFORE the session-reporter. You build the payload. The session-reporter
-asks for consent and sends it.
+You analyze the full conversation and produce a single `FeedbackSubmission`
+payload to submit to the knowledge base backend. You run before
+session-reporter. You build the payload. You do not send it.
 
 You may run multiple times in one conversation. Each time, re-read the ENTIRE
-conversation from the start and produce a COMPLETE current-state payload —
-not a delta. If something was corrected mid-conversation, the payload should
-reflect the corrected version, not the mistake.
+conversation and rebuild a COMPLETE current-state payload — not a delta.
+If something was corrected mid-conversation, the payload reflects the
+corrected version only.
 
 ---
 
-## Step 1 — Detect if there is anything to learn
+## Step 1 — Detect relevance
 
-Read the full conversation. Ask: **did any SolidWorks-related work happen?**
+Read the full conversation. Did any SolidWorks-related work happen?
 
 This includes: part/assembly modeling, API calls, macro generation, design
-discussions, error debugging, tolerances/fits/materials, or any SolidWorks
+discussions, error debugging, tolerances, fits, materials, or any SolidWorks
 design decisions.
 
 If **nothing SolidWorks-related happened**, output:
 ```json
 { "skip": true, "reason": "no SolidWorks work detected" }
 ```
-And stop. Do not continue.
+Stop here.
 
 ---
 
-## Step 2 — Extract everything worth storing
+## Step 2 — Identify the part and look it up
 
-Work through the conversation and extract the following. Apply judgment —
-only extract things that are:
-- Specific enough to be actionable
-- Not already obvious from the SolidWorks documentation
-- Likely to help future sessions on the same or similar parts
+Extract the part identifier from the conversation
+(e.g. `"Shaft-M-245"`, `"driveshaft"`, `"CRIST-001"`).
 
-### 2a — Part identity
+Then look up whether this part already exists in the catalog:
+
+```
+GET {SW_KB_HOST}/api/parts?q={part_identifier}
+```
+
+- If a match is found: save the returned `id` as `partId`.
+- If no match or request fails: `partId = null`.
+- Save `partId` and `partNumber` to `.sw-learner-state.json`.
+
+---
+
+## Step 3 — Extract knowledge
+
+Work through the full conversation and extract the following.
+Apply judgment: only extract things that are specific, actionable,
+and not already obvious from SolidWorks documentation.
+
+---
+
+### 3a — `issues` (string, required)
+
+Write a narrative paragraph (2–5 sentences) covering:
+- What was built (part name, what it does, SW version if mentioned)
+- What Claude did in this session (approach, key API calls)
+- What went wrong and had to be corrected (Claude's mistakes)
+- The final state (completed / in-progress / failed)
+
+This is read by a human admin reviewer. Be specific and factual.
+
+Example:
+```
+Built the threaded M8×1.25 bore on housing-001 using InsertHelix + InsertCutSwept4
+(the native Thread feature is broken on SW2026). Claude initially placed the cut
+sketch on the outer face boundary, causing FeatureCut4 to return None silently.
+Fixed by offsetting the sketch plane inside the material and cutting outward.
+Part exported to STEP; mass verified at 7.85×steel density.
+```
+
+---
+
+### 3b — `instructions` (array)
+
+Extract the ordered, step-by-step build process for this part.
+Each array item = one `InstructionCreate` object:
 
 ```json
-"part": {
-  "part_number":        "string — the identifier used in conversation (e.g. 'Shaft-M-245', 'driveshaft', 'CRIST-001'). Required.",
-  "name":               "string or null — human-readable name if different from part_number",
-  "category":           "string or null — part type (shaft, assembly, housing, bracket, yoke, etc.)",
-  "material":           "string or null — material if mentioned (e.g. 'Plain Carbon Steel', '6061-T6')",
-  "solidworks_version": "string or null — SW version if mentioned (e.g. 'SW2026')",
-  "parameters":         "object or null — key dimensions/tolerances mentioned, values in mm/MPa/etc.",
-  "design_intent":      "string or null — one sentence: what this part does or why it exists"
+{
+  "content": "string — full markdown text (see format below)",
+  "partId": "<partId from Step 2, or null>"
 }
 ```
 
-### 2b — Part-specific build instructions
+**`content` format** — write as numbered markdown steps, include exact
+API calls, parameters, and values that actually worked:
 
-Extract the ordered, step-by-step sequence of what was done to build this part.
-Each step maps to one SolidWorks operation or logical phase.
+```markdown
+## How to build [part name]
 
-```json
-"part_instructions": [
-  {
-    "step_number":  "integer, 1-indexed, must be in correct build order",
-    "title":        "short label for this step",
-    "body":         "markdown — what to do, including exact API calls, parameters, values",
-    "sw_feature":   "string or null — primary SolidWorks feature/API used (e.g. 'InsertHelix', 'FeatureExtrusion3')"
-  }
-]
+**SW version:** SW2026  
+**Material:** Plain Carbon Steel  
+**Key parameters:** shaft_diameter=12mm, thread=M8×1.25, length=100mm
+
+### Steps
+
+1. `new_part()` — create part document
+2. Sketch on **Front Plane**: circle Ø12 centred at origin
+3. `FeatureExtrusion3(depth=100, mid=True)` — extrude midplane 100mm
+4. `InsertHelix(Reversed=True, Clockwised=True, Helixdef=2, Height=22, Pitch=1.25)`
+   — Helixdef 2 = height+pitch mode; returns void, find "Helix/Spiral1" in tree
+5. Sketch on **Top Plane** (start of helix): ISO 60° V profile
+   — depth = pitch/2 = 0.625mm, half-width = depth×tan(30°) = 0.361mm
+6. `InsertCutSwept4(...)` — profile Mark=1 (SKETCH), helix Mark=4 (REFERENCECURVES)
+7. `apply_material("Plain Carbon Steel")`
+8. `save_as("work/housing-001.sldprt")`
+9. `export("work/housing-001.step")`
+
+**Verify:** mass delta for M8×1.25 × 22mm bore ≈ −0.7g steel
 ```
 
 Rules:
-- Order matters. SolidWorks rebuild depends on feature order.
-- If the approach changed mid-conversation (mistake → correction), write the CORRECTED steps only.
-- Include the exact working parameters where known (depths, pitches, diameters, etc.).
-- Omit steps that failed and were abandoned.
-
-### 2c — General guidance (global instructions)
-
-Extract patterns, rules, or approaches that apply BEYOND this specific part —
-things Claude should follow in any future SolidWorks session.
-
-```json
-"global_guidance": [
-  {
-    "title":       "short rule title",
-    "body":        "markdown — what to do, when, and why",
-    "category":    "one of: modeling/API | assembly/API | tolerance | fastener | dfm | verification | workflow | session/API",
-    "applies_to":  "string — when this rule kicks in (e.g. 'any blind cut', 'before any assembly mate', 'always')"
-  }
-]
-```
-
-Only include guidance that is non-obvious and actually demonstrated in this
-conversation. Do not paraphrase the SolidWorks docs.
-
-### 2d — Claude's mistakes
-
-Extract every mistake Claude made that the user had to correct or that caused
-a failure. Do NOT include engineering/design errors — only Claude's wrong
-decisions, wrong API usage, wrong approaches.
-
-```json
-"claude_mistakes": [
-  {
-    "title":        "short label",
-    "what_claude_did":    "what Claude attempted",
-    "what_went_wrong":    "the exact failure (error message, None return, wrong result)",
-    "root_cause":         "why it was wrong",
-    "correct_approach":   "what actually worked",
-    "sw_feature":         "string or null — SolidWorks feature/API involved",
-    "severity":           "low | medium | high | critical",
-    "creates_rule":       "boolean — true if this mistake is common enough to become an enforceable rule"
-  }
-]
-```
-
-### 2e — Macros
-
-Extract any VBA or Python code that was generated, modified, or referenced.
-
-```json
-"macros": [
-  {
-    "name":               "snake_case name describing what the macro does",
-    "description":        "string or null — one sentence",
-    "language":           "vba | python | swapi",
-    "code":               "full source code as written in the conversation",
-    "sw_features_used":   ["list of SW features/API methods called"],
-    "parameters":         "object or null — configurable variables (name: default_value)",
-    "is_template":        "boolean — true if this macro is generic/reusable, false if part-specific"
-  }
-]
-```
-
-If code was partially written or edited across multiple messages, reconstruct
-the final complete version from the conversation. Only include the working
-version, not failed attempts.
-
-### 2f — Session metadata
-
-```json
-"session": {
-  "status":             "completed | in_progress | failed",
-  "feature_sequence":   ["ordered list of all SW features applied in this session"],
-  "kb_docs_queried":    ["any knowledge base lookups: recall_knowledge, material(), fit(), etc."],
-  "potential_issues":   ["risks or warnings raised for this part that future sessions should know"],
-  "work_summary":       "one sentence: what was accomplished in this session"
-}
-```
+- Write the CORRECTED steps only — omit failed attempts.
+- If the part was not fully built, write steps for what was completed.
+- If nothing was built step-by-step (only discussion), omit this array.
+- One instruction object per logical build task (one part, one feature set).
+- Include exact parameter values where known.
 
 ---
 
-## Step 3 — Build the unified payload
+### 3c — `macros` (array)
 
-Assemble everything into one structured object:
+Extract any VBA, Python, or SWAPI code that was generated or used.
+Each array item = one `MacroCreate` object:
 
 ```json
 {
-  "session_id":        "<read from .sw-learner-state.json if exists, otherwise null>",
-  "part":              { "<2a>" },
-  "part_instructions": [ "<2b>" ],
-  "global_guidance":   [ "<2c>" ],
-  "claude_mistakes":   [ "<2d>" ],
-  "macros":            [ "<2e>" ],
-  "session":           { "<2f>" },
-  "payload_version":   "<integer — increment by 1 each time learner runs in this conversation. Start at 1.>",
-  "conversation_turn": "<integer — which message turn this payload was built at>"
+  "name": "snake_case_name",
+  "language": "vba | python | swapi",
+  "code": "full source code — reconstruct complete working version from conversation",
+  "description": "one sentence or null",
+  "swFeaturesUsed": ["InsertHelix", "InsertCutSwept4"],
+  "parameters": { "shaft_diameter_mm": 12, "thread_pitch_mm": 1.25 },
+  "isTemplate": false,
+  "version": "1.0.0",
+  "partId": "<partId or null>"
 }
 ```
 
-Rules for the payload:
-- Omit any section that has no content (don't include empty arrays or null objects).
-- `session_id` is null on the first run, then populated from local state after first successful send.
-- `payload_version` tracks how many times the learner has run this conversation.
-- Always reflect the CURRENT state — corrected steps, not the original mistakes.
+Rules:
+- `code`: always the FINAL WORKING version. If edited multiple times, reconstruct
+  the complete final state from all the edits in the conversation.
+- `swFeaturesUsed`: list the actual SW API methods called, not generic feature names.
+- `parameters`: configurable variables the caller can override before running.
+- `isTemplate`: true only if the macro is generic and works for any part of this type.
+- If code was broken and never fixed: omit it.
+- If no code was written: omit this array.
 
 ---
 
-## Step 4 — API mapping
+### 3d — `knownErrors` (array)
 
-> **NOTE:** This section will be updated with real endpoint details once the
-> backend API is finalized. Until then, the mapping below reflects the OpenAPI
-> spec in `docs/openapi.json`.
+Extract each concrete SolidWorks error Claude caused or encountered,
+where the exact failure and resolution are known.
+Each array item = one `KnownErrorCreate` object:
 
-When the session-reporter sends the payload, it should:
-
-### First send (session_id is null):
-```
-1. POST /api/v1/parts              → create or find the part, get part_id
-2. POST /api/v1/sessions           → create session with part_id, get session_id
-   → save session_id to .sw-learner-state.json
-3. POST /api/v1/parts/{part_id}/instructions/bulk   → all part_instructions
-4. POST /api/v1/parts/{part_id}/macros              → one POST per macro
-5. POST /api/v1/lessons                             → one POST per global_guidance item
-6. POST /api/v1/lessons                             → one POST per claude_mistake
-   (claude_mistakes map to lessons with category matching their domain)
-7. PATCH /api/v1/sessions/{session_id}              → session metadata
-```
-
-### Subsequent sends (session_id exists):
-```
-1. PATCH /api/v1/parts/{part_id}                    → update part if parameters changed
-2. PUT   /api/v1/parts/{part_id}/instructions/reorder → replace all instructions with updated set
-3. POST  /api/v1/parts/{part_id}/macros             → add new macros only
-4. POST  /api/v1/lessons                            → add new lessons only (no dedup needed, backend handles it)
-5. PATCH /api/v1/sessions/{session_id}              → update session metadata and status
-```
-
----
-
-## Step 5 — Output to session-reporter
-
-Return the complete payload object. Do not send it yourself.
-The session-reporter receives this payload, asks the user for consent,
-and handles all HTTP calls.
-
-If you produced a payload (not skipped), output it as raw JSON.
-If you skipped, output: `{ "skip": true, "reason": "..." }`
-
----
-
-## Local state file
-
-The learner reads and writes `.sw-learner-state.json` in the project root
-to persist the session_id between runs within the same conversation.
-
-Schema:
 ```json
 {
-  "session_id":    "uuid or null",
-  "part_id":       "uuid or null",
-  "part_number":   "string — the part_number from the last payload",
-  "payload_version": "integer",
-  "last_sent_at":  "ISO datetime"
+  "title": "short label — what failed",
+  "description": "what Claude attempted and what exactly went wrong (error message, None return, wrong output)",
+  "errorCode": "CAD-XXX-001 or null — use existing ref codes if mentioned in conversation",
+  "swFeature": "the SW API method or feature that failed, or null",
+  "resolution": "exact fix that worked, or null if unresolved",
+  "isResolved": true,
+  "severity": "low | medium | high | critical"
 }
 ```
 
-On first run: state file does not exist or session_id is null → CREATE flow.
-On subsequent runs: read session_id from state → UPDATE flow.
-Reset the state file when a NEW part/session starts (part_number changes).
+Rules:
+- Only include errors where the cause and/or resolution is concrete and specific.
+- `severity` mapping: critical = part produced nothing / total failure;
+  high = wrong result that looked correct; medium = caught and fixed quickly;
+  low = minor inconvenience.
+- Do NOT include: typos, syntax errors fixed immediately, issues outside SolidWorks.
+- If no concrete errors occurred: omit this array.
+
+---
+
+### 3e — `lessons` (array)
+
+Extract broader lessons learned — patterns, rules, and approaches
+that apply beyond this specific part.
+Each array item = one `LessonCreate` object:
+
+```json
+{
+  "category": "modeling/API | assembly/API | tolerance | fastener | dfm | verification | workflow | session/API",
+  "title": "short rule title",
+  "whatHappened": "narrative of what occurred",
+  "rootCause": "why it happened — the underlying reason, not just the symptom",
+  "prevention": "concrete rule to follow to prevent this — actionable",
+  "severity": "low | medium | high | critical",
+  "partId": "<partId or null>",
+  "refCode": "CAD-XXX-001 or null",
+  "createsRule": false
+}
+```
+
+Rules:
+- Include lessons from BOTH mistakes (what went wrong) AND successes
+  (approaches that worked and aren't obvious).
+- `prevention` must be a concrete action, not "be careful".
+- `createsRule`: set to true only if this is a universal rule that should be
+  auto-enforced on every future design (e.g. "never use a boundary-face sketch
+  for blind cuts"). Leave false for situation-specific guidance.
+- One lesson per distinct insight. Do not combine multiple lessons.
+- If nothing non-obvious was learned: omit this array.
+
+---
+
+## Step 4 — Build the payload
+
+Assemble the `FeedbackSubmission` object:
+
+```json
+{
+  "issues":        "<3a — narrative string>",
+  "partId":        "<partId from Step 2, or null>",
+  "sessionId":     "<from .sw-learner-state.json if exists, else null>",
+  "images":        [],
+  "instructions":  [ "<3b objects>" ],
+  "macros":        [ "<3c objects>" ],
+  "knownErrors":   [ "<3d objects>" ],
+  "lessons":       [ "<3e objects>" ]
+}
+```
+
+Rules:
+- Omit any array key entirely if it has no items (not `[]`, just omit the key).
+- `issues` is always required — even if no errors occurred, describe what was done.
+- `images` is always `[]` unless screenshots from the conversation are available
+  as base64. Leave empty for now.
+- `sessionId`: read from `.sw-learner-state.json` → `sessionId` field if present.
+- `partId`: from Step 2.
+
+---
+
+## Step 5 — Output
+
+Return the complete payload object as raw JSON.
+
+If skipped (Step 1): return `{ "skip": true, "reason": "..." }`.
+
+Also update `.sw-learner-state.json`:
+```json
+{
+  "partId":        "<partId or null>",
+  "partNumber":    "<part_number string>",
+  "sessionId":     "<sessionId from server after first send, or null>",
+  "payloadVersion": "<increment by 1 each run, start at 1>",
+  "lastBuiltAt":   "<ISO datetime string>"
+}
+```
 
 ---
 
 ## Judgment rules
 
-Apply these when deciding what to include:
-
 | Include | Skip |
 |---------|------|
-| Mistakes that caused real failures (None return, crash, wrong output) | Typos or syntax errors the user fixed immediately |
-| Steps with exact API signatures and parameters that actually worked | Steps that are just "open SolidWorks and start a new part" |
-| General rules demonstrated by a real failure in this conversation | Rules that just restate SolidWorks documentation |
-| Macros that are complete and functional | Partial/broken code snippets |
-| Guidance that would have prevented a mistake seen in THIS conversation | Generic best practices not grounded in this session |
+| Errors with exact failure message / None return / wrong output | Vague "something didn't work" without specifics |
+| Macros that are complete and functional | Partial or broken code never fixed |
+| Steps with exact API signatures and real parameter values | "Open SolidWorks and create a new part" |
+| Lessons grounded in a failure or success in THIS conversation | Generic SW best practices not demonstrated here |
+| Any mistake that took more than one attempt to fix | Immediate typo fixes |
 
-When in doubt: **include it**. The backend can filter; missing knowledge cannot be recovered.
+When in doubt: **include it**. Admin reviews before publishing. Missing knowledge cannot be recovered after the conversation ends.
+
+---
+
+## Field name reference (camelCase — match exactly)
+
+| Payload field      | Type     | Required |
+|--------------------|----------|----------|
+| `issues`           | string   | yes      |
+| `partId`           | string?  | no       |
+| `sessionId`        | string?  | no       |
+| `images`           | array    | no       |
+| `instructions`     | array    | no       |
+| `macros`           | array    | no       |
+| `knownErrors`      | array    | no       |
+| `lessons`          | array    | no       |
+
+**Instruction fields:** `content` (string, required), `partId` (string?)
+
+**Macro fields:** `name`, `language` (vba/python/swapi), `code` — all required;
+`description`, `swFeaturesUsed`, `parameters`, `isTemplate`, `version`, `partId` — optional
+
+**KnownError fields:** `title`, `description` — required;
+`errorCode`, `swFeature`, `resolution`, `isResolved`, `severity` — optional
+
+**Lesson fields:** `category`, `title`, `whatHappened`, `rootCause`, `prevention`,
+`severity` — all required; `partId`, `refCode`, `createsRule`,
+`ruleCheckType`, `ruleParameters` — optional

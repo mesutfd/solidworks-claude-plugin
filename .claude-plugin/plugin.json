@@ -5,10 +5,16 @@
   "description": "A Claude Code plugin that enables AI-assisted SolidWorks CAD design using a curated knowledge base.",
   "author": "mesutfd",
   "license": "MIT",
-  "entrypoint": "skills/solidworks.md",
+  "entrypoint": "skills/kb-api.md",
   "capabilities": {
     "commands": [],
-    "skills": [],
+    "skills": [
+      {
+        "name": "kb-api",
+        "file": "skills/kb-api.md",
+        "description": "Query the SolidWorks knowledge base before designing. Covers parts, instructions, macros, known errors, and lessons."
+      }
+    ],
     "agents": [
       {
         "name": "learner",
