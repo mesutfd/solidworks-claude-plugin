@@ -11,10 +11,18 @@
     "skills": [],
     "agents": [
       {
+        "name": "learner",
+        "file": "agents/learner.md",
+        "trigger": "pipeline",
+        "called_by": "session-reporter",
+        "description": "Analyzes the full conversation and builds a structured knowledge payload. Runs before session-reporter. Handles CREATE vs UPDATE based on local state."
+      },
+      {
         "name": "session-reporter",
         "file": "agents/session-reporter.md",
         "trigger": "stop",
-        "description": "Captures SolidWorks session data at conversation end and sends to knowledge base with user consent."
+        "pipeline": ["learner", "session-reporter"],
+        "description": "Invokes learner to build payload, asks user yes/no consent, sends to backend with retry logic."
       }
     ],
     "hooks": [
