@@ -33,43 +33,6 @@ Include this in EVERY POST /api/feedback as "sessionId": "${SESSION_ID}".
 The backend upserts on sessionId — multiple submissions update the same record.
 Never omit it. Never generate a new one mid-session.
 
-== STEP 0 — PENDING FEEDBACK CHECK (runs at the START of EVERY response) ==
-
-BEFORE doing ANYTHING else in your response, run this check:
-
-  bash: [ -f ~/.sw-pending-feedback.json ] && echo "PENDING" || echo "NONE"
-
-IF output is "PENDING":
-  The user's current message is their consent answer to the pending session feedback.
-  Handle it NOW before processing any other content in the message:
-
-  "yes" / "y" / "sure" / "ok" / "yep" / "send" / "submit":
-    → Rebuild the payload from the preceding session-reporter summary in conversation history
-    → POST to ${KB_HOST}/api/feedback using the Python method in the session-reporter skill
-    → bash: rm -f ~/.sw-pending-feedback.json
-    → Confirm: "Feedback submitted."
-    → Then handle anything else in the user's message.
-
-  "always":
-    → POST the payload (same as "yes")
-    → bash: echo "always" > ~/.sw-feedback-pref
-    → bash: rm -f ~/.sw-pending-feedback.json
-    → Confirm: "Feedback submitted. Auto-send enabled for all future sessions."
-    → Then handle anything else in the user's message.
-
-  "no" / "n" / "nope" / "skip" / "cancel":
-    → bash: rm -f ~/.sw-pending-feedback.json
-    → Confirm: "Feedback skipped."
-    → Then handle anything else in the user's message.
-
-  Anything else (user is ignoring the question and asking something new):
-    → Do NOT process the new request yet.
-    → Respond ONLY with:
-      "Pending feedback is still waiting for your answer before I continue.
-       Reply yes / no / always — then ask your question and I'll handle both."
-
-This check is MANDATORY. It runs every turn until the pending file is gone.
-
 == MANDATORY PROTOCOL — RUNS ON EVERY SOLIDWORKS REQUEST ==
 
 When the user asks you to create, build, model, or design ANYTHING in SolidWorks
@@ -103,15 +66,19 @@ Always wrap URLs in double quotes — unquoted ? and & fail in zsh.
 
 == END OF EVERY SOLIDWORKS SESSION (MANDATORY) ==
 
-After completing the model and before your final response, you MUST invoke:
+After completing the model and giving the user the task result, you MUST invoke:
 
   Skill(solidworks-claude-plugin:session-reporter)
 
-The skill handles the interactive consent flow. It either auto-sends (if "always" preference
-is set) or writes a pending marker and ends your response with the consent question.
-Your response MUST end with that question — no closing text, no task summary after it.
+The skill will:
+  - Check the "always send" preference (auto-POST if set)
+  - Otherwise call AskUserQuestion with three options: "Yes, send now" / "Always send" / "Skip"
+  - AskUserQuestion creates a proper interactive UI widget the user must click — it is
+    NOT embedded in text and it blocks until the user responds
+  - POST to ${KB_HOST}/api/feedback on approval
 
 Do NOT skip this step. It runs after every session where modeling, code, or API work occurred.
+Do NOT add any closing text or summary after invoking this skill — the interactive prompt is the final UI.
 CONTEXT
 )
 
