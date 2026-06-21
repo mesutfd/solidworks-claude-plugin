@@ -1,16 +1,25 @@
 {
-  "id": "solidworks-claude-plugin",
-  "displayName": "SolidWorks Design Assistant",
-  "description": "AI-powered SolidWorks CAD design assistance — sketches, features, assemblies, drawings, and macros — backed by a curated knowledge base.",
-  "category": "CAD / Engineering",
-  "tags": ["solidworks", "cad", "engineering", "3d-modeling", "design"],
-  "author": {
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "solidworks-claude-plugin",
+  "description": "SolidWorks CAD design assistant — pre-start knowledge loading, design-rule validation, catalog lookup, and session feedback for AI-assisted SolidWorks modeling.",
+  "owner": {
     "name": "mesutfd",
     "url": "https://github.com/mesutfd"
   },
-  "repository": "https://github.com/mesutfd/solidworks-claude-plugin",
-  "license": "MIT",
-  "version": "0.1.0",
-  "screenshots": [],
-  "installInstructions": "See README.md for setup instructions including knowledge base API configuration."
+  "plugins": [
+    {
+      "name": "solidworks-claude-plugin",
+      "description": "AI-powered SolidWorks CAD design assistance backed by a curated knowledge base. Loads conventions, design rules, and published instructions before every modeling session.",
+      "author": {
+        "name": "mesutfd"
+      },
+      "category": "engineering",
+      "source": {
+        "source": "url",
+        "url": "https://github.com/mesutfd/solidworks-claude-plugin.git",
+        "sha": "61e1ee7751de7be1b2e1d671f36a76d980ee2121"
+      },
+      "homepage": "https://github.com/mesutfd/solidworks-claude-plugin"
+    }
+  ]
 }
