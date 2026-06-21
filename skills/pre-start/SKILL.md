@@ -339,7 +339,7 @@ User asks to build X
           → fix all 'fail' results before proceeding
         │
         ▼
-[Continue to KB catalog lookup per kb-api skill]
+[Continue to kb-api skill for catalog lookup]
 [Build the model]
         │
         ▼
@@ -347,6 +347,8 @@ User asks to build X
           → fix any new fails
           → document advisories in session feedback
 ```
+
+After completing Phases 1–4, invoke Skill(solidworks-claude-plugin:kb-api) for catalog lookup.
 
 ---
 
@@ -361,20 +363,3 @@ User asks to build X
 
 **Never block the user's task because of a KB failure.**
 The KB is an accelerator, not a gatekeeper.
-
----
-
-## What This Gives You
-
-After completing Phases 1–4, you hold:
-
-| Loaded data | Effect during design |
-|-------------|---------------------|
-| Conventions | Units, defaults, naming — applied automatically |
-| Design rules | Constraints checked before each decision |
-| Knowledge docs | Exact API signatures, recipes, strategies — reduces guessing |
-| check-context report | Known violations flagged before modeling starts |
-| Standards (on demand) | Precise ISO numbers — no approximating |
-
-A session that skips these phases will trigger known errors, use wrong tolerances,
-and produce designs that fail design-rule checks. Always run them first.

@@ -1,6 +1,6 @@
 {
   "name": "solidworks-claude-plugin",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "displayName": "SolidWorks Design Assistant",
   "description": "A Claude Code plugin that enables AI-assisted SolidWorks CAD design using a curated knowledge base.",
   "author": {
@@ -8,37 +8,33 @@
     "url": "https://github.com/mesutfd"
   },
   "license": "MIT",
-  "entrypoint": "skills/pre-start.md",
+  "entrypoint": "skills/pre-start/SKILL.md",
   "capabilities": {
     "commands": [],
     "skills": [
       {
         "name": "pre-start",
-        "file": "skills/pre-start.md",
+        "file": "skills/pre-start/SKILL.md",
         "description": "Mandatory pre-start sequence: load conventions, design rules, relevant knowledge docs, and validate design parameters before any SolidWorks action. Runs first, every time.",
         "priority": 1
       },
       {
         "name": "kb-api",
-        "file": "skills/kb-api.md",
+        "file": "skills/kb-api/SKILL.md",
         "description": "Catalog lookup: navigate categories → parts → full detail (instructions, macros, known errors, lessons) before building. Runs after pre-start.",
         "priority": 2
-      }
-    ],
-    "agents": [
+      },
       {
         "name": "learner",
-        "file": "agents/learner.md",
-        "trigger": "pipeline",
-        "called_by": "session-reporter",
-        "description": "Analyzes the full conversation and builds a structured knowledge payload. Runs before session-reporter. Handles CREATE vs UPDATE based on local state."
+        "file": "skills/learner/SKILL.md",
+        "description": "Tracks the session in real time. When invoked, produces the structured FeedbackSubmission payload for session-reporter.",
+        "priority": 3
       },
       {
         "name": "session-reporter",
-        "file": "agents/session-reporter.md",
-        "trigger": "stop",
-        "pipeline": ["learner", "session-reporter"],
-        "description": "Invokes learner to build payload, asks user yes/no consent, sends to backend with retry logic."
+        "file": "skills/session-reporter/SKILL.md",
+        "description": "Runs at the end of every SolidWorks session. Invokes learner, asks user consent, POSTs structured feedback to the knowledge base.",
+        "priority": 4
       }
     ],
     "mcp": false

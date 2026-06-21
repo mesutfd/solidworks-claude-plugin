@@ -23,24 +23,30 @@ escape_for_json() {
 }
 
 context=$(cat <<CONTEXT
-You have the SolidWorks Design Plugin active.
+You have the SolidWorks Design Plugin active (KB: ${KB_HOST}).
 
-MANDATORY RULE: Any time the user asks you to create, build, model, or design
-anything in SolidWorks — including parts, assemblies, gears, shafts, housings,
-or any other mechanical component — you MUST complete the full pre-start sequence
-before writing any code, opening SolidWorks, or generating any geometry.
-
-Do NOT use generic brainstorming or project planning for SolidWorks design tasks.
-The knowledge base is the starting point. Always.
-
-== SESSION ID (use this for ALL feedback submissions in this conversation) ==
+== SESSION ID (fixed for this entire conversation) ==
 
 SESSION_ID: ${SESSION_ID}
 
-This ID is fixed for the entire conversation. Every POST to /api/feedback MUST
-include "sessionId": "${SESSION_ID}". The backend upserts on sessionId — sending
-the same sessionId multiple times updates the same record instead of creating
-duplicates. Never omit it, never generate a new one mid-session.
+Include this in EVERY POST /api/feedback as "sessionId": "${SESSION_ID}".
+The backend upserts on sessionId — multiple submissions update the same record.
+Never omit it. Never generate a new one mid-session.
+
+== MANDATORY PROTOCOL — RUNS ON EVERY SOLIDWORKS REQUEST ==
+
+When the user asks you to create, build, model, or design ANYTHING in SolidWorks
+(parts, assemblies, gears, shafts, housings, or any mechanical component), you
+MUST invoke these skills in order before writing any code or modeling anything:
+
+  1. Invoke Skill(solidworks-claude-plugin:pre-start)
+     Loads conventions, design rules, knowledge docs, and validates parameters.
+
+  2. Invoke Skill(solidworks-claude-plugin:kb-api)
+     Looks up the specific part in the catalog (instructions, macros, errors, lessons).
+
+Do NOT skip these. Do NOT use generic brainstorming instead. The knowledge base
+is the starting point. Always.
 
 == LEARNER — ACTIVE FROM THE FIRST MESSAGE ==
 
@@ -51,7 +57,6 @@ As work progresses, mentally note:
 - KNOWN ERRORS: concrete failures with their SW API method and resolution
 - LESSONS: non-obvious patterns and rules that emerge (successes AND failures)
 
-This tracking costs nothing now and makes the session-reporter accurate at the end.
 Invoke Skill(solidworks-claude-plugin:learner) to produce the structured payload.
 
 == CRITICAL: HOW TO CALL THE KB SERVER ==
@@ -65,62 +70,6 @@ Wrong:     Fetch(...) or WebFetch(...)
 Always wrap URLs in double quotes — unquoted ? and & are treated as shell
 glob/background operators in zsh and will fail.
 
-== PRE-START SEQUENCE (run in order before any modeling) ==
-
-Knowledge base URL: ${KB_HOST}
-All APIs are public — no authentication needed.
-
-STEP 1 — Check server
-  GET ${KB_HOST}/health
-  If offline: note it and continue without KB. Never block the task.
-
-STEP 2 — Load conventions (always-apply rules)
-  GET ${KB_HOST}/api/knowledge?kind=convention
-  Read every body field. Treat as hard rules: metric units, ISO 2768-mK tolerance,
-  6061-T6 default material, parametric modeling, named dimensions.
-
-STEP 3 — Load design rules
-  GET ${KB_HOST}/api/design-rules
-  Internalize each active rule (skip deprecated:true).
-  Check rules before every relevant design decision.
-
-STEP 4 — Search task-relevant knowledge
-  GET ${KB_HOST}/api/knowledge/search?q={describe what you are building}
-  Read top 5-8 results. Playbooks first, then reference docs.
-  Reference docs contain exact SolidWorks API signatures — do not skip them.
-
-STEP 5 — Validate design parameters
-  POST ${KB_HOST}/api/check-context
-  Body: { known design params — material, process, fasteners, dimensions, wall thickness }
-  React: fail=stop and fix, advisory=apply, na=ignore.
-
-== CATALOG LOOKUP (after pre-start, before modeling) ==
-
-STEP 6 — Find the part in the catalog
-  GET ${KB_HOST}/api/categories         → find the category
-  GET ${KB_HOST}/api/parts?categoryId=X → find the part in that category
-  GET ${KB_HOST}/api/parts/{id}         → get full detail:
-    instructions → follow as primary build guide
-    macros       → run directly if complete, adapt if template
-    knownErrors  → check before each SW API call, apply resolution proactively
-    lessons      → apply as constraints throughout
-
-STEP 7 — Load global errors and lessons
-  GET ${KB_HOST}/api/errors
-  GET ${KB_HOST}/api/lessons
-  Cross-reference by swFeature before every API call.
-
-== STANDARDS (on demand during design) ==
-  GET ${KB_HOST}/api/standards/materials/{name}      — material properties
-  GET ${KB_HOST}/api/standards/fits                  — shaft/hole fit deviations
-  GET ${KB_HOST}/api/standards/clearance_holes/{M#}  — bolt clearance hole sizes
-  GET ${KB_HOST}/api/standards/tolerances_iso2768    — tolerance values by class
-  GET ${KB_HOST}/api/standards/fasteners/{M#}        — fastener geometry
-
-== AFTER MODELING ==
-  POST ${KB_HOST}/api/check-context  { final design parameters }
-  Fix any new fails. Document advisories in session feedback.
-
 == END OF EVERY SOLIDWORKS SESSION (MANDATORY) ==
 
 After completing the model and before your final response, you MUST invoke:
@@ -128,7 +77,8 @@ After completing the model and before your final response, you MUST invoke:
   Skill(solidworks-claude-plugin:session-reporter)
 
 This skill analyzes what was built, asks the user one yes/no consent question,
-and POSTs the structured feedback to ${KB_HOST}/api/feedback.
+and POSTs the structured feedback to ${KB_HOST}/api/feedback using SESSION_ID
+above so multiple submissions in the same conversation update one record.
 
 Do NOT skip this step. Do NOT forget it. It runs after every SolidWorks session
 where any modeling, design, API calls, or macro work occurred.
