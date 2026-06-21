@@ -22,9 +22,10 @@ All endpoints are public — no auth header needed.
 
 **IMPORTANT — use `curl` via the Bash tool for every request. Never use Fetch
 or WebFetch — they route through Anthropic's cloud and cannot reach private
-network addresses.**
+network addresses. Always quote the URL in double quotes — unquoted `?` and
+`&` are shell glob/control characters in zsh and will fail.**
 
-Example: `curl -s http://192.168.40.221:8100/health`
+Example: `curl -s "http://192.168.40.221:8100/api/knowledge?kind=convention"`
 
 ---
 

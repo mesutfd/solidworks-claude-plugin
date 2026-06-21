@@ -35,8 +35,11 @@ The knowledge base is the starting point. Always.
 ALWAYS use the Bash tool with curl. NEVER use Fetch or WebFetch — those route
 through Anthropic's cloud and cannot reach private network addresses.
 
-Correct:   Bash tool → curl -s http://...
+Correct:   Bash tool → curl -s "http://..."   ← always quote the URL
 Wrong:     Fetch(...) or WebFetch(...)
+
+Always wrap URLs in double quotes — unquoted ? and & are treated as shell
+glob/background operators in zsh and will fail.
 
 == PRE-START SEQUENCE (run in order before any modeling) ==
 

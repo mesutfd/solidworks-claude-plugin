@@ -25,7 +25,8 @@ All endpoints are **public — no auth header needed**.
 
 **IMPORTANT — use `curl` via the Bash tool for every request. Never use Fetch
 or WebFetch — they route through Anthropic's cloud and cannot reach private
-network addresses.**
+network addresses. Always quote the URL in double quotes — unquoted `?` and
+`&` are shell glob/control characters in zsh and will fail.**
 
 ---
 
