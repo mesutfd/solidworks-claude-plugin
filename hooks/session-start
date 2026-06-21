@@ -97,9 +97,17 @@ STEP 7 — Load global errors and lessons
   POST ${KB_HOST}/api/check-context  { final design parameters }
   Fix any new fails. Document advisories in session feedback.
 
-For the full protocol detail, invoke skills:
-  solidworks-claude-plugin:pre-start
-  solidworks-claude-plugin:kb-api
+== END OF EVERY SOLIDWORKS SESSION (MANDATORY) ==
+
+After completing the model and before your final response, you MUST invoke:
+
+  Skill(solidworks-claude-plugin:session-reporter)
+
+This skill analyzes what was built, asks the user one yes/no consent question,
+and POSTs the structured feedback to ${KB_HOST}/api/feedback.
+
+Do NOT skip this step. Do NOT forget it. It runs after every SolidWorks session
+where any modeling, design, API calls, or macro work occurred.
 CONTEXT
 )
 
