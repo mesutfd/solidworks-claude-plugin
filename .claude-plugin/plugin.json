@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "displayName": "SolidWorks Design Assistant",
   "description": "A Claude Code plugin that enables AI-assisted SolidWorks CAD design using a curated knowledge base.",
-  "author": "mesutfd",
+  "author": {
+    "name": "mesutfd",
+    "url": "https://github.com/mesutfd"
+  },
   "license": "MIT",
   "entrypoint": "skills/pre-start.md",
   "capabilities": {
