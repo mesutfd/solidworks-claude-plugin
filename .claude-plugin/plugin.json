@@ -41,13 +41,6 @@
         "description": "Invokes learner to build payload, asks user yes/no consent, sends to backend with retry logic."
       }
     ],
-    "hooks": [
-      {
-        "event": "Stop",
-        "file": "hooks/stop.md",
-        "agent": "session-reporter"
-      }
-    ],
     "mcp": false
   },
   "userConfig": {
