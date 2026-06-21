@@ -52,6 +52,7 @@
   },
   "userConfig": {
     "SW_KB_HOST": {
+      "title": "Knowledge Base URL",
       "description": "Base URL of the SolidWorks knowledge base API server",
       "type": "string",
       "default": "http://192.168.40.221:8100",
