@@ -30,6 +30,14 @@ before writing any code, opening SolidWorks, or generating any geometry.
 Do NOT use generic brainstorming or project planning for SolidWorks design tasks.
 The knowledge base is the starting point. Always.
 
+== CRITICAL: HOW TO CALL THE KB SERVER ==
+
+ALWAYS use the Bash tool with curl. NEVER use Fetch or WebFetch — those route
+through Anthropic's cloud and cannot reach private network addresses.
+
+Correct:   Bash tool → curl -s http://...
+Wrong:     Fetch(...) or WebFetch(...)
+
 == PRE-START SEQUENCE (run in order before any modeling) ==
 
 Knowledge base URL: ${KB_HOST}

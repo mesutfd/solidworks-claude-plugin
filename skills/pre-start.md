@@ -20,6 +20,12 @@ Do not skip phases. Do not reorder them. Do not start modeling mid-phase.
 Base URL: `SW_KB_HOST` plugin config (default: `http://192.168.40.221:8100`)
 All endpoints are public — no auth header needed.
 
+**IMPORTANT — use `curl` via the Bash tool for every request. Never use Fetch
+or WebFetch — they route through Anthropic's cloud and cannot reach private
+network addresses.**
+
+Example: `curl -s http://192.168.40.221:8100/health`
+
 ---
 
 ## Phase 1 — Load Conventions (always-apply rules)

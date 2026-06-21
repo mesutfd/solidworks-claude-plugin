@@ -23,6 +23,10 @@ lessons from real past sessions. Always use what exists before inventing.
 Base URL: `SW_KB_HOST` plugin config (default: `http://192.168.40.221:8100`)
 All endpoints are **public — no auth header needed**.
 
+**IMPORTANT — use `curl` via the Bash tool for every request. Never use Fetch
+or WebFetch — they route through Anthropic's cloud and cannot reach private
+network addresses.**
+
 ---
 
 ## Mandatory Lookup Sequence
