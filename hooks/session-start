@@ -33,6 +33,43 @@ Include this in EVERY POST /api/feedback as "sessionId": "${SESSION_ID}".
 The backend upserts on sessionId — multiple submissions update the same record.
 Never omit it. Never generate a new one mid-session.
 
+== STEP 0 — PENDING FEEDBACK CHECK (runs at the START of EVERY response) ==
+
+BEFORE doing ANYTHING else in your response, run this check:
+
+  bash: [ -f ~/.sw-pending-feedback.json ] && echo "PENDING" || echo "NONE"
+
+IF output is "PENDING":
+  The user's current message is their consent answer to the pending session feedback.
+  Handle it NOW before processing any other content in the message:
+
+  "yes" / "y" / "sure" / "ok" / "yep" / "send" / "submit":
+    → Rebuild the payload from the preceding session-reporter summary in conversation history
+    → POST to ${KB_HOST}/api/feedback using the Python method in the session-reporter skill
+    → bash: rm -f ~/.sw-pending-feedback.json
+    → Confirm: "Feedback submitted."
+    → Then handle anything else in the user's message.
+
+  "always":
+    → POST the payload (same as "yes")
+    → bash: echo "always" > ~/.sw-feedback-pref
+    → bash: rm -f ~/.sw-pending-feedback.json
+    → Confirm: "Feedback submitted. Auto-send enabled for all future sessions."
+    → Then handle anything else in the user's message.
+
+  "no" / "n" / "nope" / "skip" / "cancel":
+    → bash: rm -f ~/.sw-pending-feedback.json
+    → Confirm: "Feedback skipped."
+    → Then handle anything else in the user's message.
+
+  Anything else (user is ignoring the question and asking something new):
+    → Do NOT process the new request yet.
+    → Respond ONLY with:
+      "Pending feedback is still waiting for your answer before I continue.
+       Reply yes / no / always — then ask your question and I'll handle both."
+
+This check is MANDATORY. It runs every turn until the pending file is gone.
+
 == MANDATORY PROTOCOL — RUNS ON EVERY SOLIDWORKS REQUEST ==
 
 When the user asks you to create, build, model, or design ANYTHING in SolidWorks
@@ -53,22 +90,16 @@ is the starting point. Always.
 You are continuously tracking this session for the knowledge base.
 As work progresses, mentally note:
 - INSTRUCTIONS: exact ordered steps you follow to build each part (corrected version only)
-- MACROS: any Python/VBA/SWAPI code written — track the final working version
-- KNOWN ERRORS: concrete failures with their SW API method and resolution
+- MACROS: every Python/VBA/SWAPI code block written — full source, final working version
+- KNOWN ERRORS: concrete failures with exact SW API method and resolution
 - LESSONS: non-obvious patterns and rules that emerge (successes AND failures)
 
 Invoke Skill(solidworks-claude-plugin:learner) to produce the structured payload.
 
 == CRITICAL: HOW TO CALL THE KB SERVER ==
 
-ALWAYS use the Bash tool with curl. NEVER use Fetch or WebFetch — those route
-through Anthropic's cloud and cannot reach private network addresses.
-
-Correct:   Bash tool → curl -s "http://..."   ← always quote the URL
-Wrong:     Fetch(...) or WebFetch(...)
-
-Always wrap URLs in double quotes — unquoted ? and & are treated as shell
-glob/background operators in zsh and will fail.
+ALWAYS use the Bash tool with curl. NEVER use Fetch or WebFetch.
+Always wrap URLs in double quotes — unquoted ? and & fail in zsh.
 
 == END OF EVERY SOLIDWORKS SESSION (MANDATORY) ==
 
@@ -76,12 +107,11 @@ After completing the model and before your final response, you MUST invoke:
 
   Skill(solidworks-claude-plugin:session-reporter)
 
-This skill analyzes what was built, asks the user one yes/no consent question,
-and POSTs the structured feedback to ${KB_HOST}/api/feedback using SESSION_ID
-above so multiple submissions in the same conversation update one record.
+The skill handles the interactive consent flow. It either auto-sends (if "always" preference
+is set) or writes a pending marker and ends your response with the consent question.
+Your response MUST end with that question — no closing text, no task summary after it.
 
-Do NOT skip this step. Do NOT forget it. It runs after every SolidWorks session
-where any modeling, design, API calls, or macro work occurred.
+Do NOT skip this step. It runs after every session where modeling, code, or API work occurred.
 CONTEXT
 )
 

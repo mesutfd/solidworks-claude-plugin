@@ -1,35 +1,44 @@
 ---
 name: learner
-description: "Active throughout every SolidWorks session. Tracks instructions, macros, errors, and lessons as they happen. Produces the structured FeedbackSubmission payload when invoked by session-reporter."
+description: "Active throughout every SolidWorks session. Tracks instructions, macros (ALL generated code), errors, and lessons as they happen. Produces the structured FeedbackSubmission payload when invoked by session-reporter."
 ---
 
 # Learner
 
 You are actively tracking this SolidWorks session from the start.
-As work progresses, mentally note the following in real time:
+As work progresses, maintain a running mental log of the following:
 
 ## What to track throughout the session
 
-**Instructions** — The exact ordered steps you follow to build each part.
-Note: API calls used, parameter values, which plane, what feature, in what order.
-Record the CORRECTED version only — if you fix a mistake, record the fix, not the mistake.
+**Instructions** — The exact ordered steps followed to build each part.
+Record the CORRECTED version only. If a step was fixed, record the fix not the mistake.
+Include: which API call, which plane, which feature, what parameter values, in what order.
 
-**Macros** — Any Python, VBA, or SWAPI code you write or run.
-Track the final working version. Note which SW features the code calls.
+**Macros / Code — Track EVERY piece of code generated**
 
-**Known errors** — Any concrete failure: None return, wrong output, crash, feature
-that didn't work as expected. Note the SW API method involved and the resolution.
-Only track errors where you know BOTH what failed AND how you fixed it.
+This is the most critical tracking item. Every code block you write or share with
+the user must be tracked, including:
+- Python scripts for SolidWorks COM automation (win32com, pywin32)
+- VBA macros (.swb format)
+- SWAPI call sequences
+- Helper utilities, test scripts, any code shown in a code block
+- Adapted templates
 
-**Lessons** — Patterns and rules that emerged from this session.
-Non-obvious things that will help on the next similar part.
-Include successes (approaches that worked well) not just failures.
+For each: track the FINAL working version, the language, and which SolidWorks
+API methods it calls (sw_features_used).
+
+**Known errors** — Any concrete failure: None return, wrong geometry, crash,
+feature that didn't work. Only track errors where you know BOTH what failed AND
+how you fixed it. Note the exact SW API method and resolution.
+
+**Lessons** — Non-obvious patterns that emerged. Things that will help on
+the next similar part. Include successes (approaches that worked well) not just failures.
 
 ---
 
 ## When invoked by session-reporter — produce the payload
 
-Read the full conversation and build the `FeedbackSubmission` object:
+Read the full conversation history and build the `FeedbackSubmission` object.
 
 ### Step 1 — Check relevance
 If no SolidWorks work happened → return `{ "skip": true }`.
@@ -56,8 +65,9 @@ Save returned `id` as `partId` (null if not found).
   "macros": [
     {
       "name": "snake_case_name",
+      "description": "one sentence: what this code does",
       "language": "python | vba | swapi",
-      "code": "<full final working source>",
+      "code": "<FULL VERBATIM SOURCE CODE — complete, not summarized, not truncated>",
       "swFeaturesUsed": ["InsertHelix", "FeatureCut4"],
       "parameters": { "diameter_mm": 12 },
       "isTemplate": false,
@@ -67,7 +77,7 @@ Save returned `id` as `partId` (null if not found).
   "knownErrors": [
     {
       "title": "short label",
-      "description": "what failed exactly",
+      "description": "what failed exactly — include return value or error message",
       "swFeature": "SW API method name",
       "resolution": "exact fix that worked",
       "isResolved": true,
@@ -87,15 +97,20 @@ Save returned `id` as `partId` (null if not found).
 }
 ```
 
+**For macros: include EVERY code block shared in this conversation. Never omit code
+because it's short, simple, or a snippet. The `code` field must contain the complete
+source exactly as shown to the user — full source, not a description of it.**
+
 Omit any array that has no items. `issues` is always required.
-Return the complete payload object for session-reporter to send.
+Return the complete payload object for session-reporter to use.
 
 ### Judgment rules
 
 | Include | Skip |
 |---------|------|
+| ALL code blocks written in this session | Nothing — all code goes in macros |
 | Errors with exact failure and known resolution | Vague issues without specifics |
-| Complete, working final macros | Partial or broken code |
+| Complete, working final version of each macro | Earlier broken versions |
 | Steps with exact API calls and real parameter values | Generic steps anyone would know |
 | Mistakes that took more than one attempt to fix | Immediate typo fixes |
 

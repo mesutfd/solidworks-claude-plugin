@@ -1,30 +1,52 @@
 ---
 name: session-reporter
-description: "Run at the end of every SolidWorks session. Analyzes what was built, asks the user for consent, and POSTs a structured feedback payload to the knowledge base. Must run before giving the final response in any session where SolidWorks work occurred."
+description: "Run at the end of every SolidWorks session. Collects all generated knowledge and code, checks 'always-send' preference, asks interactive consent, and POSTs the structured payload to the knowledge base. Operates in two phases across two turns."
 ---
 
 # Session Reporter
 
-Collect and submit knowledge from this SolidWorks session to the knowledge base.
-Run this after modeling is complete, before your final response.
+## Architecture — Two-Phase Interactive Flow
 
-KB_HOST: `http://192.168.40.221:8100` (or SW_KB_HOST if configured)
-SESSION_ID: read from the session context injected at startup — use it in every POST.
-Use `curl` via Bash for all requests. Never use Fetch or WebFetch.
+This skill spans two conversation turns by design:
+
+**Phase A** (end of the modeling turn — when you invoke this skill):
+- Check auto-send preference. If "always" → build payload, POST immediately, done in one turn.
+- Otherwise: extract all knowledge and code, write a pending marker to disk,
+  display the payload summary, and end the response with ONLY the consent question.
+
+**Phase B** (start of the NEXT turn — handled by the hook):
+- The hook instructs you to check for the pending marker at the start of every turn.
+- The user's answer is processed before anything else in that turn.
+
+**This is what makes it feel interactive and blocking:**
+the response does not conclude with a task summary — it concludes with the consent question,
+and nothing else happens until the user answers it.
 
 ---
 
 ## Step 1 — Detect relevance
 
 Did any SolidWorks work happen in this session?
-This includes: part/assembly modeling, API calls, macro generation, design
-decisions, error debugging, tolerances, fits, materials.
+This includes: part/assembly modeling, API calls, macro generation, code written,
+design decisions, error debugging, tolerances, fits, materials.
 
-If nothing SolidWorks-related happened → skip silently. Do not ask the user anything.
+If nothing SolidWorks-related happened → skip silently. Do not ask anything.
 
 ---
 
-## Step 2 — Look up the part
+## Step 2 — Check "always send" preference
+
+```bash
+PREF=$(cat ~/.sw-feedback-pref 2>/dev/null || echo "")
+echo "preference: $PREF"
+```
+
+- If output is `always` → skip Steps 4–5 (no consent question needed), go directly to Step 6 (POST).
+- Otherwise → continue to Step 3.
+
+---
+
+## Step 3 — Look up the part
 
 Extract the part name/number from the conversation.
 
@@ -36,101 +58,215 @@ If a match is found: save its `id` as `partId`. Otherwise `partId = null`.
 
 ---
 
-## Step 3 — Extract knowledge from the conversation
+## Step 4 — Extract ALL knowledge and code from the conversation
 
-Read the full conversation and extract:
+Read the entire conversation history and extract the following.
 
 ### `issues` (required — narrative string)
-2–5 sentences covering: what was built, what approach Claude took, what went
-wrong and had to be corrected, final state (complete / in-progress / failed).
+2–5 sentences covering: what was built, approach taken, what went wrong and was
+corrected, final state (complete / in-progress / failed).
 
-### `instructions` (array — omit if nothing was built step-by-step)
-One object per build task:
+### `instructions` (array — steps to build the part)
+Write CORRECTED steps only. Include exact SolidWorks API calls and parameter values.
 ```json
 {
   "content": "## How to build [part]\n\n**Material:** ...\n\n### Steps\n1. ...\n2. ...",
   "partId": "<partId or null>"
 }
 ```
-Write CORRECTED steps only. Include exact API calls and parameter values.
 
-### `macros` (array — omit if no code was written)
+### `macros` (array — ALL code generated in this session)
+
+**CRITICAL: Capture EVERY piece of code you wrote or ran during this session.**
+
+Include in macros:
+- Every Python script for SolidWorks automation (pywin32, COM, win32com)
+- Every VBA macro written
+- Every SWAPI call sequence
+- Any helper functions, utility scripts, or code snippets shared with the user
+- Templates that were adapted
+
+For EACH code artifact, create one entry:
 ```json
 {
-  "name": "snake_case_name",
+  "name": "snake_case_descriptive_name",
+  "description": "one sentence: what this code does",
   "language": "python | vba | swapi",
-  "code": "full final working source",
-  "swFeaturesUsed": ["InsertHelix", "FeatureCut4"],
-  "parameters": { "diameter_mm": 12 },
+  "code": "<FULL VERBATIM SOURCE — complete, not summarized, not truncated>",
+  "swFeaturesUsed": ["InsertHelix", "FeatureCut4", "FeatureExtrusion3"],
+  "parameters": { "shaft_diameter_mm": 12, "thread_pitch_mm": 1.25 },
   "isTemplate": false,
   "partId": "<partId or null>"
 }
 ```
-Only include complete, working final versions. Skip broken/unfinished code.
 
-### `knownErrors` (array — omit if no concrete errors)
+Rules for `code` field:
+- **Full source only** — never a summary, never "..." truncation
+- Include imports, class definitions, helper functions — everything needed to run it
+- If the code was corrected mid-session: include the FINAL working version only
+- If multiple versions exist: include the final one, note corrections in `description`
+
+Rules for `swFeaturesUsed`:
+- Extract from the code: every SolidWorks API method name called (InsertHelix, FeatureCut4, etc.)
+- If the code doesn't call SW APIs directly, list the SW features it automates
+
+**Do not skip code because it's "short" or "simple". Every code artifact the user received must be in this array.**
+
+### `knownErrors` (array — concrete failures with resolutions)
 ```json
 {
   "title": "short label",
-  "description": "what failed exactly",
-  "swFeature": "the SW API method",
+  "description": "what failed exactly — include the return value or error message",
+  "swFeature": "the SW API method that failed",
   "resolution": "exact fix that worked",
   "isResolved": true,
   "severity": "low | medium | high | critical"
 }
 ```
-Only include errors where the cause and resolution are known.
+Only include errors where BOTH cause AND resolution are known.
 
-### `lessons` (array — omit if nothing non-obvious was learned)
+### `lessons` (array — non-obvious rules that emerged)
 ```json
 {
   "category": "modeling/API | assembly/API | tolerance | fastener | dfm | workflow",
   "title": "short rule title",
-  "whatHappened": "narrative",
-  "rootCause": "underlying reason",
-  "prevention": "concrete actionable rule",
+  "whatHappened": "narrative of what happened",
+  "rootCause": "underlying reason it happened",
+  "prevention": "concrete actionable rule for the future",
   "severity": "low | medium | high | critical"
 }
 ```
 
 ---
 
-## Step 4 — Ask for consent
+## Step 5 — Write pending marker and display summary
 
-Ask the user **exactly this one question**:
+Write a marker so the hook knows feedback is pending:
+```bash
+echo '{"pending":true}' > ~/.sw-pending-feedback.json
+```
 
-> "Share this session's SolidWorks data with the knowledge base to help improve future designs? (yes / no)"
+Then display the payload summary to the user. Format it clearly:
 
-- **no** (or no reply): stop here. Send nothing.
-- **yes**: continue to Step 5.
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ SOLIDWORKS SESSION KNOWLEDGE READY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ Part:         [part name or "general session"]
+ Instructions: [N] build steps
+ Macros:       [N] code artifacts
+               • [macro name] ([language], [N] lines)
+               • ...
+ Known Errors: [N] (all resolved)
+ Lessons:      [N] patterns captured
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ Send to knowledge base?
+
+  yes     → send now
+  no      → skip this session
+  always  → send now + auto-send in all future sessions
+
+```
+
+**This is the LAST thing in your response. Do not add any closing text, summary,
+or sign-off after this block. The response ends here.**
 
 ---
 
-## Step 5 — Build and POST the payload
+## Step 6 — POST the payload (runs after "yes" or "always" consent, or auto-runs if preference="always")
+
+Use Python to build and send the payload to avoid shell escaping issues with code:
 
 ```bash
-curl -s -X POST "http://192.168.40.221:8100/api/feedback" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "issues": "<narrative>",
+python3 << 'PYEOF'
+import subprocess, json, os
+
+payload = {
+    "issues": """<issues narrative>""",
     "sessionId": "<SESSION_ID from session context>",
-    "partId": "<partId or null>",
-    "instructions": [...],
-    "macros": [...],
-    "knownErrors": [...],
-    "lessons": [...]
-  }'
+    "partId": "<partId or null — use JSON null, not the string 'null'>",
+    "instructions": [
+        {
+            "content": """<full instruction content>""",
+            "partId": "<partId or null>"
+        }
+    ],
+    "macros": [
+        {
+            "name": "macro_name",
+            "description": "what this does",
+            "language": "python",
+            "code": """<FULL SOURCE CODE verbatim>""",
+            "swFeaturesUsed": ["InsertHelix"],
+            "parameters": {},
+            "isTemplate": False,
+            "partId": None
+        }
+    ],
+    "knownErrors": [
+        {
+            "title": "title",
+            "description": "what failed",
+            "swFeature": "FeatureCut4",
+            "resolution": "exact fix",
+            "isResolved": True,
+            "severity": "medium"
+        }
+    ],
+    "lessons": [
+        {
+            "category": "modeling/API",
+            "title": "title",
+            "whatHappened": "...",
+            "rootCause": "...",
+            "prevention": "...",
+            "severity": "medium"
+        }
+    ]
+}
+
+# Remove null partId at top level (server expects absence, not null)
+if payload.get("partId") is None:
+    del payload["partId"]
+
+# Remove empty arrays
+for key in ["instructions", "macros", "knownErrors", "lessons"]:
+    if not payload.get(key):
+        payload.pop(key, None)
+
+body = json.dumps(payload)
+result = subprocess.run(
+    ["curl", "-s", "-w", "\n%{http_code}", "-X", "POST",
+     "http://192.168.40.221:8100/api/feedback",
+     "-H", "Content-Type: application/json",
+     "-d", body],
+    capture_output=True, text=True
+)
+print(result.stdout)
+PYEOF
 ```
 
-`sessionId` is MANDATORY. The backend upserts on it — the same session sending
-feedback twice updates the record rather than creating a duplicate.
+Expected: HTTP 201 with `{ "id": "...", "state": "pending" }`.
 
-Omit any array key that has no items. `issues` is always required.
+Retry up to 3 times on 5xx or connection error. Drop on 4xx.
 
-Expected response: HTTP 201 with `{ "id": "...", "state": "pending" }`.
+---
 
-Retry up to 3 times on 5xx or timeout. Drop immediately on 4xx.
-On success or final failure: continue to your final response. Never block the user.
+## Step 7 — Handle "always" consent: save preference
+
+If the user answered "always":
+```bash
+echo "always" > ~/.sw-feedback-pref
+echo "Auto-send preference saved."
+```
+
+---
+
+## Step 8 — Clean up pending marker
+
+```bash
+rm -f ~/.sw-pending-feedback.json
+```
 
 ---
 
@@ -138,9 +274,29 @@ On success or final failure: continue to your final response. Never block the us
 
 | Include | Skip |
 |---------|------|
-| Errors with exact failure / None return / wrong output | Vague "something didn't work" |
-| Complete working macros | Partial or broken code |
-| Steps with exact API signatures and real values | Generic "open SolidWorks and create a part" |
-| Mistakes that took more than one attempt to fix | Immediate typo fixes |
+| ALL code written in this session | Nothing — every code artifact goes in |
+| Errors with exact failure / return value | Vague "something didn't work" |
+| Steps with exact SW API calls and real parameter values | Generic "open SolidWorks and create a part" |
+| Mistakes that needed more than one attempt to fix | Immediate typo fixes |
+| Complete working macros | Code that was tried and abandoned (only include the final working version) |
 
 When in doubt: include it. Admin reviews before publishing.
+
+---
+
+## Consent question: exact format
+
+Always use this exact block as the final output — nothing after it:
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ SOLIDWORKS SESSION KNOWLEDGE READY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ Part:         [name]
+ Instructions: [N] steps
+ Macros:       [N] — [names and languages]
+ Known Errors: [N]
+ Lessons:      [N]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ Send to knowledge base?  →  yes / no / always
+```
