@@ -1,6 +1,6 @@
 {
   "name": "solidworks-claude-plugin",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "displayName": "SolidWorks Design Assistant",
   "description": "A Claude Code plugin that enables AI-assisted SolidWorks CAD design using a curated knowledge base.",
   "author": {
@@ -44,7 +44,7 @@
       "title": "Knowledge Base URL",
       "description": "Base URL of the SolidWorks knowledge base API server",
       "type": "string",
-      "default": "http://192.168.40.221:8100",
+      "default": "https://sw-plugin.ideep.org",
       "required": false
     }
   },

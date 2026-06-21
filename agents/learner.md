@@ -190,6 +190,60 @@ Rules:
 
 ---
 
+### 3f — `images` (array)
+
+Collect screenshots and rendered images from this session.
+
+**Source 1 — Macro-saved image files**
+
+Scan all code blocks in the conversation for file paths with image extensions
+(`.png`, `.jpg`, `.jpeg`, `.bmp`, `.tiff`, `.tif`, `.gif`).
+Look for patterns like: `SaveBMP`, `ExportBMP`, `ExportPDF`, `save_as_image`,
+`SaveAs`, or any assignment/print of a path ending in an image extension.
+
+For each path found:
+```bash
+# Convert Windows path to WSL path if needed
+# C:\Users\... → /mnt/c/Users/...
+# Then check and encode
+FILE="<resolved_path>"
+if [ -f "$FILE" ]; then
+    SIZE=$(stat -c%s "$FILE" 2>/dev/null || echo 0)
+    if [ "$SIZE" -lt 10485760 ]; then   # skip files > 10 MB
+        base64 -w 0 "$FILE"
+    fi
+fi
+```
+
+**Source 2 — Images loaded into the chat**
+
+Check the conversation for any image files that were read or displayed inline
+(e.g., via a `Read` tool call on an image file, or a user-uploaded screenshot
+shown in the conversation). These appear as file paths in `Read` tool calls or
+as references like `[Image: /tmp/...]`.
+
+Apply the same `base64 -w 0` encoding step for each path found.
+
+**For each successfully encoded image**, add one entry:
+```json
+{
+  "filename": "screenshot.png",
+  "contentType": "image/png",
+  "dataBase64": "<base64 string>"
+}
+```
+
+Content-type mapping: `.png` → `image/png` | `.jpg`/`.jpeg` → `image/jpeg` |
+`.bmp` → `image/bmp` | `.tiff`/`.tif` → `image/tiff` | `.gif` → `image/gif`
+
+Rules:
+- Deduplicate by filename — never add the same file twice.
+- Skip files that don't exist on disk or are unreadable.
+- Skip files larger than 10 MB.
+- If no images found or readable: omit the `images` key from the payload.
+
+---
+
 ### 3e — `lessons` (array)
 
 Extract broader lessons learned — patterns, rules, and approaches
@@ -231,7 +285,7 @@ Assemble the `FeedbackSubmission` object:
   "issues":        "<3a — narrative string>",
   "partId":        "<partId from Step 2, or null>",
   "sessionId":     "<from .sw-learner-state.json if exists, else null>",
-  "images":        [],
+  "images":        [ "<3f ImageInput objects, if any>" ],
   "instructions":  [ "<3b objects>" ],
   "macros":        [ "<3c objects>" ],
   "knownErrors":   [ "<3d objects>" ],
@@ -242,8 +296,7 @@ Assemble the `FeedbackSubmission` object:
 Rules:
 - Omit any array key entirely if it has no items (not `[]`, just omit the key).
 - `issues` is always required — even if no errors occurred, describe what was done.
-- `images` is always `[]` unless screenshots from the conversation are available
-  as base64. Leave empty for now.
+- `images`: populate from Step 3f. Omit the key if no images were found/readable.
 - `sessionId`: read from `.sw-learner-state.json` → `sessionId` field if present.
 - `partId`: from Step 2.
 
@@ -289,7 +342,7 @@ When in doubt: **include it**. Admin reviews before publishing. Missing knowledg
 | `issues`           | string   | yes      |
 | `partId`           | string?  | no       |
 | `sessionId`        | string?  | no       |
-| `images`           | array    | no       |
+| `images`           | array    | no       | each item: `{ filename, contentType, dataBase64 }` |
 | `instructions`     | array    | no       |
 | `macros`           | array    | no       |
 | `knownErrors`      | array    | no       |

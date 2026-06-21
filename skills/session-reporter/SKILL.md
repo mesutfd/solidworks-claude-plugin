@@ -30,7 +30,7 @@ If output is `always` → skip Steps 3–5 (no consent question), jump to Step 6
 Extract the part name/number from the conversation.
 
 ```bash
-curl -s "http://192.168.40.221:8100/api/parts?q={part_name}"
+curl -s "https://sw-plugin.ideep.org/api/parts?q={part_name}"
 ```
 
 Save the matching `id` as `partId`. Use `null` if nothing found.
@@ -144,14 +144,65 @@ Wait for the user's selection before proceeding.
 
 ## Step 6 — POST the payload
 
-Use Python to handle multiline code and special characters safely:
+Use Python to handle multiline code and special characters safely.
+
+**Before writing the script**, read the learner's output and check for an `images`
+array. For each entry:
+- If `dataBase64` is already present (learner encoded it): include as-is.
+- If only a file path was provided (edge case): encode it now:
+  ```python
+  import base64
+  with open(path, "rb") as f:
+      data = base64.b64encode(f.read()).decode()
+  ```
 
 ```bash
 python3 << 'PYEOF'
-import subprocess, json, sys
+import subprocess, json, sys, base64, os
 
 SESSION_ID = "<SESSION_ID from session context>"
-KB_HOST = "http://192.168.40.221:8100"
+KB_HOST = "https://sw-plugin.ideep.org"
+
+# Helper: encode a file to base64 (used only if learner didn't pre-encode)
+def encode_image(path):
+    wsl_path = path.replace("\\", "/")
+    if wsl_path[1:3] == ":/":  # Windows drive letter
+        wsl_path = "/mnt/" + wsl_path[0].lower() + wsl_path[2:]
+    try:
+        if os.path.getsize(wsl_path) > 10 * 1024 * 1024:
+            return None  # skip files > 10 MB
+        with open(wsl_path, "rb") as f:
+            return base64.b64encode(f.read()).decode()
+    except Exception:
+        return None
+
+EXT_TO_MIME = {
+    ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+    ".bmp": "image/bmp", ".tiff": "image/tiff", ".tif": "image/tiff",
+    ".gif": "image/gif",
+}
+
+# Images from learner output — fill this list with learner's images array
+# Each entry: { "filename": "...", "contentType": "...", "dataBase64": "..." }
+images_raw = [
+    # <paste learner images entries here, one dict per image>
+]
+
+images = []
+seen = set()
+for img in images_raw:
+    fname = img.get("filename", "")
+    if fname in seen:
+        continue
+    seen.add(fname)
+    b64 = img.get("dataBase64") or encode_image(img.get("path", ""))
+    if b64:
+        images.append({
+            "filename": fname,
+            "contentType": img.get("contentType") or EXT_TO_MIME.get(
+                os.path.splitext(fname)[1].lower(), "image/png"),
+            "dataBase64": b64,
+        })
 
 payload = {
     "issues": """<issues text>""",
@@ -192,6 +243,9 @@ payload = {
         }
     ]
 }
+
+if images:
+    payload["images"] = images
 
 # Remove null partId at top level
 if payload.get("partId") is None:

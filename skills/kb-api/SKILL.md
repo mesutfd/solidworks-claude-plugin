@@ -20,7 +20,7 @@ writing a single line of code or opening SolidWorks.
 The knowledge base contains published instructions, macros, known errors, and
 lessons from real past sessions. Always use what exists before inventing.
 
-Base URL: `SW_KB_HOST` plugin config (default: `http://192.168.40.221:8100`)
+Base URL: `SW_KB_HOST` plugin config (default: `https://sw-plugin.ideep.org`)
 All endpoints are **public — no auth header needed**.
 
 **IMPORTANT — use `curl` via the Bash tool for every request. Never use Fetch

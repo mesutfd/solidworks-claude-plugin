@@ -50,7 +50,7 @@ Content-Type: application/json
 
 **Body:** the complete `FeedbackSubmission` payload from the learner, verbatim.
 
-**SW_KB_HOST** → read from plugin config (default: `http://192.168.40.221:8100`). No auth required — the API is public.
+**SW_KB_HOST** → read from plugin config (default: `https://sw-plugin.ideep.org`). No auth required — the API is public.
 
 **Expected response:** HTTP 201
 ```json

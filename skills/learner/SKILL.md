@@ -45,9 +45,51 @@ If no SolidWorks work happened → return `{ "skip": true }`.
 
 ### Step 2 — Look up the part
 ```bash
-curl -s "http://192.168.40.221:8100/api/parts?q={part_name}"
+curl -s "https://sw-plugin.ideep.org/api/parts?q={part_name}"
 ```
 Save returned `id` as `partId` (null if not found).
+
+### Step 2b — Collect images
+
+Collect screenshots and rendered images from this session before building the payload.
+
+**Source 1 — Macro-saved image files**
+
+Scan all code blocks in the conversation for file paths with image extensions
+(`.png`, `.jpg`, `.jpeg`, `.bmp`, `.tiff`, `.tif`, `.gif`).
+Look for patterns like: `SaveBMP`, `ExportBMP`, `ExportPDF`, `save_as_image`,
+`SaveAs`, or any assignment/string ending in an image extension.
+
+**Source 2 — Images loaded into chat**
+
+Check for image files referenced in `Read` tool calls or user-uploaded screenshots
+shown inline in the conversation (e.g., `[Image: /tmp/...]`).
+
+**For each path found**, resolve Windows paths to WSL paths (`C:\foo\bar.png` →
+`/mnt/c/foo/bar.png`), then read and encode:
+
+```bash
+FILE="<resolved_path>"
+if [ -f "$FILE" ]; then
+    SIZE=$(stat -c%s "$FILE" 2>/dev/null || echo 0)
+    if [ "$SIZE" -lt 10485760 ]; then
+        base64 -w 0 "$FILE"
+    fi
+fi
+```
+
+Each successfully encoded image becomes one `ImageInput` object:
+```json
+{ "filename": "model.png", "contentType": "image/png", "dataBase64": "<base64>" }
+```
+
+Content-type map: `.png`→`image/png`, `.jpg`/`.jpeg`→`image/jpeg`,
+`.bmp`→`image/bmp`, `.tiff`/`.tif`→`image/tiff`, `.gif`→`image/gif`
+
+Deduplicate by filename. Skip files that don't exist, are unreadable, or exceed 10 MB.
+Omit the `images` key from the payload entirely if no images were found.
+
+---
 
 ### Step 3 — Build payload
 
@@ -56,6 +98,9 @@ Save returned `id` as `partId` (null if not found).
   "issues": "<2–5 sentence narrative: what was built, approach, mistakes, final state>",
   "sessionId": "<SESSION_ID from session context — MANDATORY for upsert>",
   "partId": "<uuid or null>",
+  "images": [
+    { "filename": "model.png", "contentType": "image/png", "dataBase64": "<base64>" }
+  ],
   "instructions": [
     {
       "content": "## How to build [part]\n\n**Material:** ...\n\n### Steps\n1. ...",
@@ -101,7 +146,7 @@ Save returned `id` as `partId` (null if not found).
 because it's short, simple, or a snippet. The `code` field must contain the complete
 source exactly as shown to the user — full source, not a description of it.**
 
-Omit any array that has no items. `issues` is always required.
+Omit any array that has no items (including `images`). `issues` is always required.
 Return the complete payload object for session-reporter to use.
 
 ### Judgment rules

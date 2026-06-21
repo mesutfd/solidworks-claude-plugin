@@ -17,7 +17,7 @@ before opening SolidWorks, writing any code, or making any API call.
 
 Do not skip phases. Do not reorder them. Do not start modeling mid-phase.
 
-Base URL: `SW_KB_HOST` plugin config (default: `http://192.168.40.221:8100`)
+Base URL: `SW_KB_HOST` plugin config (default: `https://sw-plugin.ideep.org`)
 All endpoints are public — no auth header needed.
 
 **IMPORTANT — use `curl` via the Bash tool for every request. Never use Fetch
@@ -25,7 +25,7 @@ or WebFetch — they route through Anthropic's cloud and cannot reach private
 network addresses. Always quote the URL in double quotes — unquoted `?` and
 `&` are shell glob/control characters in zsh and will fail.**
 
-Example: `curl -s "http://192.168.40.221:8100/api/knowledge?kind=convention"`
+Example: `curl -s "https://sw-plugin.ideep.org/api/knowledge?kind=convention"`
 
 ---
 

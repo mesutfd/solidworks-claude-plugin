@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 # Read userConfig SW_KB_HOST, fall back to the built-in default
-KB_HOST="${SW_KB_HOST:-http://192.168.40.221:8100}"
+KB_HOST="${SW_KB_HOST:-https://sw-plugin.ideep.org}"
 
 # Generate a unique session ID for this conversation (used for feedback upsert)
 SESSION_ID=$(python3 -c "import uuid; print(uuid.uuid4())" 2>/dev/null || uuidgen 2>/dev/null || cat /proc/sys/kernel/random/uuid 2>/dev/null || date +%s%N)
