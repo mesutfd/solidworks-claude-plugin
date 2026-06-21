@@ -1,6 +1,6 @@
 {
   "name": "solidworks-claude-plugin",
-  "version": "0.1.7",
+  "version": "1.1.7",
   "displayName": "SolidWorks Design Assistant",
   "description": "A Claude Code plugin that enables AI-assisted SolidWorks CAD design using a curated knowledge base.",
   "author": {
