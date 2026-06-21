@@ -17,8 +17,8 @@ before opening SolidWorks, writing any code, or making any API call.
 
 Do not skip phases. Do not reorder them. Do not start modeling mid-phase.
 
-Base URL: `SW_KB_HOST` env var (default: `http://localhost:8000`)
-All endpoints below are public — no auth header needed.
+Base URL: `SW_KB_HOST` plugin config (default: `http://192.168.40.221:8100`)
+All endpoints are public — no auth header needed.
 
 ---
 

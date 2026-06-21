@@ -20,8 +20,8 @@ writing a single line of code or opening SolidWorks.
 The knowledge base contains published instructions, macros, known errors, and
 lessons from real past sessions. Always use what exists before inventing.
 
-Base URL: `SW_KB_HOST` environment variable (default: `http://localhost:8000`)
-All GET endpoints are **public — no auth header needed**.
+Base URL: `SW_KB_HOST` plugin config (default: `http://192.168.40.221:8100`)
+All endpoints are **public — no auth header needed**.
 
 ---
 

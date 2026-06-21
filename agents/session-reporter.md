@@ -46,13 +46,11 @@ Ask the user **exactly this**:
 **Headers:**
 ```
 Content-Type: application/json
-Authorization: Bearer {SW_KB_API_KEY}
 ```
 
 **Body:** the complete `FeedbackSubmission` payload from the learner, verbatim.
 
-**SW_KB_HOST** → read from environment, default `http://localhost:8000`
-**SW_KB_API_KEY** → read from environment. If not set: exit silently before sending.
+**SW_KB_HOST** → read from plugin config (default: `http://192.168.40.221:8100`). No auth required — the API is public.
 
 **Expected response:** HTTP 201
 ```json
@@ -82,4 +80,4 @@ On success: save the returned `id` to `.sw-learner-state.json` as `lastFeedbackI
 - Never ask any question other than the consent question.
 - Never interrupt a mid-session conversation — you only fire at the `Stop` event.
 - If the learner skips → you skip. No consent question asked.
-- Do not retry on 4xx — the payload is malformed or auth is wrong; retrying won't help.
+- Do not retry on 4xx — the payload is malformed; retrying won't help.
