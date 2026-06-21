@@ -9,6 +9,10 @@ trigger: always
 
 # SolidWorks Knowledge Base — Design Lookup Protocol
 
+**Run order: `pre-start` skill first, then this skill.** Pre-start loads
+conventions, design rules, and knowledge documents. This skill looks up the
+specific part in the catalog. Complete both before modeling.
+
 **This skill is mandatory.** Every time a user asks you to create, build, or
 model anything in SolidWorks, you MUST follow the lookup sequence below before
 writing a single line of code or opening SolidWorks.
