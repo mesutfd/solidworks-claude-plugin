@@ -45,6 +45,7 @@ Save returned `id` as `partId` (null if not found).
 ```json
 {
   "issues": "<2–5 sentence narrative: what was built, approach, mistakes, final state>",
+  "sessionId": "<SESSION_ID from session context — MANDATORY for upsert>",
   "partId": "<uuid or null>",
   "instructions": [
     {

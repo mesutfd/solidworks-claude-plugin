@@ -9,6 +9,7 @@ Collect and submit knowledge from this SolidWorks session to the knowledge base.
 Run this after modeling is complete, before your final response.
 
 KB_HOST: `http://192.168.40.221:8100` (or SW_KB_HOST if configured)
+SESSION_ID: read from the session context injected at startup — use it in every POST.
 Use `curl` via Bash for all requests. Never use Fetch or WebFetch.
 
 ---
@@ -112,6 +113,7 @@ curl -s -X POST "http://192.168.40.221:8100/api/feedback" \
   -H "Content-Type: application/json" \
   -d '{
     "issues": "<narrative>",
+    "sessionId": "<SESSION_ID from session context>",
     "partId": "<partId or null>",
     "instructions": [...],
     "macros": [...],
@@ -119,6 +121,9 @@ curl -s -X POST "http://192.168.40.221:8100/api/feedback" \
     "lessons": [...]
   }'
 ```
+
+`sessionId` is MANDATORY. The backend upserts on it — the same session sending
+feedback twice updates the record rather than creating a duplicate.
 
 Omit any array key that has no items. `issues` is always required.
 

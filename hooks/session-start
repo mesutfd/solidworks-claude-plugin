@@ -9,6 +9,9 @@ PLUGIN_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # Read userConfig SW_KB_HOST, fall back to the built-in default
 KB_HOST="${SW_KB_HOST:-http://192.168.40.221:8100}"
 
+# Generate a unique session ID for this conversation (used for feedback upsert)
+SESSION_ID=$(python3 -c "import uuid; print(uuid.uuid4())" 2>/dev/null || uuidgen 2>/dev/null || cat /proc/sys/kernel/random/uuid 2>/dev/null || date +%s%N)
+
 escape_for_json() {
     local s="$1"
     s="${s//\\/\\\\}"
@@ -29,6 +32,15 @@ before writing any code, opening SolidWorks, or generating any geometry.
 
 Do NOT use generic brainstorming or project planning for SolidWorks design tasks.
 The knowledge base is the starting point. Always.
+
+== SESSION ID (use this for ALL feedback submissions in this conversation) ==
+
+SESSION_ID: ${SESSION_ID}
+
+This ID is fixed for the entire conversation. Every POST to /api/feedback MUST
+include "sessionId": "${SESSION_ID}". The backend upserts on sessionId — sending
+the same sessionId multiple times updates the same record instead of creating
+duplicates. Never omit it, never generate a new one mid-session.
 
 == LEARNER — ACTIVE FROM THE FIRST MESSAGE ==
 
