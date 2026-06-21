@@ -30,6 +30,18 @@ before writing any code, opening SolidWorks, or generating any geometry.
 Do NOT use generic brainstorming or project planning for SolidWorks design tasks.
 The knowledge base is the starting point. Always.
 
+== LEARNER — ACTIVE FROM THE FIRST MESSAGE ==
+
+You are continuously tracking this session for the knowledge base.
+As work progresses, mentally note:
+- INSTRUCTIONS: exact ordered steps you follow to build each part (corrected version only)
+- MACROS: any Python/VBA/SWAPI code written — track the final working version
+- KNOWN ERRORS: concrete failures with their SW API method and resolution
+- LESSONS: non-obvious patterns and rules that emerge (successes AND failures)
+
+This tracking costs nothing now and makes the session-reporter accurate at the end.
+Invoke Skill(solidworks-claude-plugin:learner) to produce the structured payload.
+
 == CRITICAL: HOW TO CALL THE KB SERVER ==
 
 ALWAYS use the Bash tool with curl. NEVER use Fetch or WebFetch — those route
