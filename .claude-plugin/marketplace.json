@@ -17,7 +17,7 @@
       "source": {
         "source": "url",
         "url": "https://github.com/mesutfd/solidworks-claude-plugin.git",
-        "sha": "e547a43aecce435b98b9e5e43c0270b469d10abc"
+        "sha": "916d6d6d136b573391ec1c97fd2330ac90d37bdb"
       },
       "homepage": "https://github.com/mesutfd/solidworks-claude-plugin"
     }
