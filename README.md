@@ -2,13 +2,64 @@
 
 A Claude Code plugin that brings AI-assisted SolidWorks CAD design directly into your workflow, powered by a curated knowledge base of SolidWorks documentation, macros, and design patterns.
 
-## Quick Install
+## Installation
 
-Run these in the Claude Code CLI:
+> **Prerequisites:** [Claude Code](https://docs.claude.com/en/docs/claude-code) v1.0.0 or newer.
+
+### Step 1 — Add the marketplace
+
+In an open Claude Code session, register this repo as a plugin marketplace:
 
 ```
 /plugin marketplace add mesutfd/solidworks-claude-plugin
+```
+
+Claude Code reads `.claude-plugin/marketplace.json` from the repo and registers a marketplace named `solidworks-claude-plugin`.
+
+### Step 2 — Install the plugin
+
+```
 /plugin install solidworks-claude-plugin@solidworks-claude-plugin
+```
+
+The format is `<plugin-name>@<marketplace-name>` — both happen to be `solidworks-claude-plugin` here. Confirm the install when prompted, then restart Claude Code (or run `/plugin` and reload) so the skills, agents, and hooks activate.
+
+> **Tip:** You can also browse and install interactively by running `/plugin` and selecting the marketplace from the menu.
+
+### Step 3 — Configure the knowledge base connection
+
+The plugin talks to a remote SolidWorks knowledge base over MCP. Point it at your server and add your API key. The default host is `https://sw-plugin.ideep.org`.
+
+Edit (or create) `.mcp.json` and fill in your values:
+
+```json
+{
+  "mcpServers": {
+    "solidworks-kb": {
+      "type": "http",
+      "url": "https://sw-plugin.ideep.org/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+Replace `YOUR_API_KEY` with the key issued for your knowledge base account, and swap the host if you run your own server.
+
+### Step 4 — Verify
+
+Run `/plugin` and confirm **SolidWorks Design Assistant** is listed and enabled. Start a SolidWorks task — the `pre-start` skill loads conventions and design rules before the first action, which confirms the plugin and knowledge base are wired up.
+
+### Updating & removing
+
+```
+# pull the latest plugin version
+/plugin marketplace update solidworks-claude-plugin
+
+# uninstall
+/plugin uninstall solidworks-claude-plugin@solidworks-claude-plugin
 ```
 
 ## Features (planned)
@@ -31,34 +82,6 @@ solidworks-claude-plugin/
 ├── hooks/                 # lifecycle hooks
 ├── .mcp.json              # MCP server config (knowledge base API)
 └── README.md
-```
-
-## Setup
-
-### 1. Configure the knowledge base connection
-
-Copy `.mcp.json` and fill in your server details:
-
-```json
-{
-  "mcpServers": {
-    "solidworks-kb": {
-      "url": "http://<your-kb-host>/mcp",
-      "headers": {
-        "Authorization": "Bearer <your-api-key>"
-      }
-    }
-  }
-}
-```
-
-> The knowledge base server hosts SolidWorks documentation, feature references, and macro templates used by the plugin's skills.
-
-### 2. Install into Claude Code
-
-```bash
-# From the Claude Code CLI
-claude plugin install <path-or-repo-url>
 ```
 
 ## Knowledge Base
