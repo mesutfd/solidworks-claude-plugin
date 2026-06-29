@@ -26,27 +26,24 @@ The format is `<plugin-name>@<marketplace-name>` — both happen to be `solidwor
 
 > **Tip:** You can also browse and install interactively by running `/plugin` and selecting the marketplace from the menu.
 
-### Step 3 — Configure the knowledge base connection
+### Step 3 — Configure the knowledge base connection (optional)
 
-The plugin talks to a remote SolidWorks knowledge base over MCP. Point it at your server and add your API key. The default host is `https://sw-plugin.ideep.org`.
+The plugin talks to a remote SolidWorks knowledge base over MCP. The knowledge base is **public — no API key or login required**, and it defaults to `https://sw-plugin.ideep.org`, so the plugin works out of the box.
 
-Edit (or create) `.mcp.json` and fill in your values:
+You only need this step if you run your own server. Edit (or create) `.mcp.json` and point it at your host:
 
 ```json
 {
   "mcpServers": {
     "solidworks-kb": {
       "type": "http",
-      "url": "https://sw-plugin.ideep.org/mcp",
-      "headers": {
-        "Authorization": "Bearer YOUR_API_KEY"
-      }
+      "url": "https://sw-plugin.ideep.org/mcp"
     }
   }
 }
 ```
 
-Replace `YOUR_API_KEY` with the key issued for your knowledge base account, and swap the host if you run your own server.
+Swap the `url` for your own server if you host the knowledge base yourself.
 
 ### Step 4 — Verify
 
