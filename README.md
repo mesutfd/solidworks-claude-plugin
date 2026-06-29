@@ -2,6 +2,15 @@
 
 A Claude Code plugin that brings AI-assisted SolidWorks CAD design directly into your workflow, powered by a curated knowledge base of SolidWorks documentation, macros, and design patterns.
 
+## Quick Install
+
+Run these in the Claude Code CLI:
+
+```
+/plugin marketplace add mesutfd/solidworks-claude-plugin
+/plugin install solidworks-claude-plugin@solidworks-claude-plugin
+```
+
 ## Features (planned)
 
 - Slash commands for common SolidWorks tasks (sketches, features, assemblies, drawings)
