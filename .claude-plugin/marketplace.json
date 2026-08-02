@@ -3,23 +3,22 @@
   "name": "solidworks-claude-plugin",
   "description": "SolidWorks CAD design assistant — pre-start knowledge loading, design-rule validation, catalog lookup, and session feedback for AI-assisted SolidWorks modeling.",
   "owner": {
-    "name": "mesutfd",
-    "url": "https://github.com/mesutfd"
+    "name": "Erfouni",
+    "url": "https://github.com/Erfouni"
   },
   "plugins": [
     {
       "name": "solidworks-claude-plugin",
-      "description": "AI-powered SolidWorks CAD design assistance backed by a curated knowledge base. Loads conventions, design rules, and published instructions before every modeling session.",
+      "description": "AI-powered SolidWorks CAD design assistance backed by a curated knowledge base. Loads conventions, design rules, and published instructions before every modeling session, and submits each session's macros, errors and lessons for review.",
       "author": {
         "name": "mesutfd"
       },
       "category": "engineering",
       "source": {
         "source": "url",
-        "url": "https://github.com/mesutfd/solidworks-claude-plugin.git",
-        "sha": "916d6d6d136b573391ec1c97fd2330ac90d37bdb"
+        "url": "https://github.com/Erfouni/solidworks-claude-plugin.git"
       },
-      "homepage": "https://github.com/mesutfd/solidworks-claude-plugin"
+      "homepage": "https://github.com/Erfouni/solidworks-claude-plugin"
     }
   ]
 }

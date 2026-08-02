@@ -1,6 +1,6 @@
 # SolidWorks Design Assistant — Claude Code Plugin
 
-A Claude Code plugin that brings AI-assisted SolidWorks CAD design directly into your workflow, powered by a curated knowledge base of SolidWorks documentation, macros, and design patterns.
+A Claude Code plugin that brings AI-assisted SolidWorks CAD design directly into your workflow, powered by a curated knowledge base of SolidWorks documentation, macros, standards, and design patterns.
 
 ## Installation
 
@@ -11,7 +11,7 @@ A Claude Code plugin that brings AI-assisted SolidWorks CAD design directly into
 In an open Claude Code session, register this repo as a plugin marketplace:
 
 ```
-/plugin marketplace add mesutfd/solidworks-claude-plugin
+/plugin marketplace add Erfouni/solidworks-claude-plugin
 ```
 
 Claude Code reads `.claude-plugin/marketplace.json` from the repo and registers a marketplace named `solidworks-claude-plugin`.
@@ -26,24 +26,17 @@ The format is `<plugin-name>@<marketplace-name>` — both happen to be `solidwor
 
 > **Tip:** You can also browse and install interactively by running `/plugin` and selecting the marketplace from the menu.
 
-### Step 3 — Configure the knowledge base connection (optional)
+### Step 3 — Point at your own knowledge base (optional)
 
-The plugin talks to a remote SolidWorks knowledge base over MCP. The knowledge base is **public — no API key or login required**, and it defaults to `https://sw-plugin.ideep.org`, so the plugin works out of the box.
+The plugin reads the knowledge base over plain HTTPS using `curl`. It is **public — no API key or login required** — and defaults to `https://sw-plugin.ideep.org`, so the plugin works out of the box.
 
-You only need this step if you run your own server. Edit (or create) `.mcp.json` and point it at your host:
+If you host the knowledge base yourself, set the base URL in the plugin's configuration:
 
-```json
-{
-  "mcpServers": {
-    "solidworks-kb": {
-      "type": "http",
-      "url": "https://sw-plugin.ideep.org/mcp"
-    }
-  }
-}
-```
+| Setting | Default |
+|---|---|
+| `SW_KB_HOST` | `https://sw-plugin.ideep.org` |
 
-Swap the `url` for your own server if you host the knowledge base yourself.
+Every skill reads that one value, so changing it redirects all knowledge lookups and feedback submissions.
 
 ### Step 4 — Verify
 
@@ -59,38 +52,64 @@ Run `/plugin` and confirm **SolidWorks Design Assistant** is listed and enabled.
 /plugin uninstall solidworks-claude-plugin@solidworks-claude-plugin
 ```
 
-## Features (planned)
+## How it works
 
-- Slash commands for common SolidWorks tasks (sketches, features, assemblies, drawings)
-- Skills for querying the CAD knowledge base
-- Subagents for multi-step design workflows
-- MCP connector to the knowledge base API
+Four skills run in order around a SolidWorks session:
+
+| Skill | When | What it does |
+|---|---|---|
+| `pre-start` | before any modelling | Loads conventions, all active design rules, and task-relevant knowledge documents; runs the design-rule checker against your parameters |
+| `kb-api` | after pre-start | Looks up the catalog — category → part → its instructions, macros and known errors — so an existing design is reused rather than rebuilt |
+| `learner` | throughout | Tracks instructions, every code block, errors and lessons as they happen |
+| `session-reporter` | at the end | Asks consent, then submits the session to the knowledge base for review |
+
+### The feedback loop
+
+A session produces macros, instructions, known errors and lessons. Those are submitted as **drafts** and are not visible to anyone else until a reviewer approves them in the admin console, scopes them to a part (or to general knowledge), and publishes them. Published knowledge is then served back through this plugin, so the next session starts from it.
+
+`session-reporter` also sends what it believes it built:
+
+```json
+{
+  "suggestedCategory":   "Yokes",
+  "suggestedPartName":   "Cardan yoke, 30mm bore",
+  "suggestedPartNumber": "YK-030"
+}
+```
+
+These are hints for the reviewer, never decisions — nothing is published on their strength. The agent that built the component knows what it was asked for, so passing that forward saves the reviewer working it out from code and renders.
+
+## Knowledge base contents
+
+| | |
+|---|---|
+| Knowledge documents | conventions, playbooks, API references, strategies |
+| Lessons | real failures and their prevention rules, from past sessions |
+| Design rules | enforceable checks with severities (fastener, DFM, tolerance, assembly clearance) |
+| Standards tables | materials, fasteners, fits, clearance holes, ISO 2768 tolerances, preferred numbers, sheet-metal gauges, GD&T symbols, surface finish |
+| Catalog | parts and categories, with their published macros and instructions |
+
+Documents are in English and Persian; both carry the same engineering content.
 
 ## Directory Structure
 
 ```
 solidworks-claude-plugin/
 ├── .claude-plugin/
-│   ├── plugin.json        # plugin metadata
+│   ├── plugin.json        # plugin metadata + SW_KB_HOST config
 │   └── marketplace.json   # marketplace catalog
-├── commands/              # slash commands
+├── commands/              # slash commands (none yet)
 ├── agents/                # subagents
-├── skills/                # skills
+├── skills/                # the four skills above
 ├── hooks/                 # lifecycle hooks
-├── .mcp.json              # MCP server config (knowledge base API)
+├── docs/openapi.json      # knowledge base API reference
 └── README.md
 ```
 
-## Knowledge Base
+## Not yet built
 
-The plugin connects to a remote knowledge base server that indexes:
-
-- SolidWorks feature documentation
-- VBA/API macro templates
-- Assembly and drawing best practices
-- Design pattern references
-
-API connector details will live in `skills/` once implemented.
+- Slash commands for common SolidWorks tasks (sketches, features, assemblies, drawings)
+- An MCP server for the knowledge base. The plugin does **not** use MCP today — every skill calls the REST API with `curl`, and `plugin.json` declares `"mcp": false`. An MCP transport would be an addition, not a replacement.
 
 ## License
 
