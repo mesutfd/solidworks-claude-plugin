@@ -17,6 +17,64 @@ before opening SolidWorks, writing any code, or making any API call.
 
 Do not skip phases. Do not reorder them. Do not start modeling mid-phase.
 
+---
+
+## Phase 0 — Non-negotiable engineering requirement (ENG-001)
+
+**This rule applies whether or not the knowledge base is reachable.** It is
+restated here because the error handling at the end of this document permits
+continuing when the KB is offline — and this requirement must not disappear
+along with it.
+
+Do not create schematic, decorative, conceptual, simplified, placeholder, or
+visually representative components.
+
+**Every component must be a real, functional, manufacturable, technically
+accurate part. No component — regardless of size or importance — may be created
+merely for visual representation.**
+
+For every individual component, including a single screw:
+
+1. **Research it** against reliable technical sources: peer-reviewed papers,
+   engineering references, manufacturer documentation, and the latest
+   applicable standards.
+2. **Design from validated research** — engineering principles, formulas,
+   calculations, material properties, manufacturing constraints, tolerances,
+   and safety requirements.
+3. **Justify every value.** Dimensions, geometries, connections, interfaces,
+   loads, clearances, fasteners, materials and mechanical properties must all
+   be realistic and technically defensible.
+4. **Never invent.** No assumptions, invented specifications, arbitrary
+   dimensions, fake mechanisms, or purely visual detail.
+5. **Cite what you used** — the standards, formulas, calculations and
+   references behind each part.
+
+**Model every physical component separately.** If an assembly contains 10,000
+parts, all 10,000 are researched, engineered and modelled individually. No group
+of parts may be replaced by a simplified block, visual shell, placeholder,
+texture, or symbolic representation. This covers screws, nuts, washers,
+bearings, seals, cables, connectors, welds, joints, gears, springs, housings,
+electronic components and internal mechanisms alike.
+
+The finished design must be fully functional, physically realistic,
+engineering-accurate, dimensionally consistent, manufacturable, properly
+assembled, based on validated calculations, compliant with the latest applicable
+standards, and free of decorative, fictional or representational parts.
+
+### When you do not have the information
+
+If sufficient technical information or reliable references are unavailable for a
+component, **do not fabricate or guess.** State plainly what is missing and what
+must be researched or specified before that component can be designed accurately.
+
+Stopping to ask is the correct outcome. A plausible-looking part built from
+invented numbers is a failure, not a partial success — it is worse than no part,
+because it looks finished and will be trusted.
+
+Phases 1–6 below supply much of the research this requires: the standards
+tables, design rules and published lessons exist so that values come from a
+source rather than from guesswork.
+
 Base URL: `SW_KB_HOST` plugin config (default: `https://sw-plugin.ideep.org`)
 All endpoints are public — no auth header needed.
 
@@ -322,6 +380,10 @@ in the session `issues` field when submitting feedback.
 User asks to build X
         │
         ▼
+[Phase 0] ENG-001 — real, manufacturable parts only. No placeholders,
+          no invented dimensions. Applies even when the KB is unreachable.
+        │
+        ▼
 [Phase 1] GET /api/knowledge?kind=convention
           → load all conventions as active session rules
         │
@@ -360,6 +422,12 @@ After completing Phases 1–4, invoke Skill(solidworks-claude-plugin:kb-api) for
 | 404 on knowledge search | No relevant docs found. Proceed with own knowledge. |
 | 422 on check-context | Body malformed. Try with fewer fields. Do not block. |
 | 5xx | Skip that phase. Note in session issues. Continue. |
+
+**Phase 0 is exempt from all of the above.** ENG-001 is not a KB lookup and
+does not degrade when the server is unreachable. Losing the standards tables
+means you have *less* grounding for a dimension, not permission to invent one —
+so an offline KB makes "state what is missing" more likely to be the right
+answer, not less.
 
 **Never block the user's task because of a KB failure.**
 The KB is an accelerator, not a gatekeeper.
