@@ -99,6 +99,42 @@ Only include errors where cause AND resolution are both known.
 }
 ```
 
+### `suggestedCategory`, `suggestedPartName`, `suggestedPartNumber` — classification hints
+
+You know what you were asked to build. The reviewer only sees the resulting code
+and renders, and has to work backwards from them to decide what the component is
+and where it belongs. Pass your knowledge forward so they confirm rather than guess.
+
+Fetch the current category list — never invent a category name:
+
+```
+GET {KB_HOST}/api/categories
+```
+
+Pick the single best match by `name`. If nothing fits, use `"Uncategorised"`
+rather than proposing a new one; the reviewer creates categories, not you.
+
+```json
+{
+  "suggestedCategory":   "Yokes",
+  "suggestedPartName":   "Cardan yoke, 30mm bore",
+  "suggestedPartNumber": "YK-030"
+}
+```
+
+| Field | What to put in it |
+|---|---|
+| `suggestedCategory` | Exact `name` from `/api/categories`, or `"Uncategorised"` |
+| `suggestedPartName` | Short descriptive name with the defining dimension |
+| `suggestedPartNumber` | The part number if the user gave one, or Step 3 matched an existing part. **Omit it entirely if you are inventing one** — a made-up number is worse than none |
+
+**These are hints, not decisions.** The server stores them and the console shows
+them, but nothing publishes on their strength: a reviewer still sets the part
+explicitly. So a wrong guess costs nothing, and omitting them costs only the
+reviewer's time. Send your honest best guess.
+
+Omit any field you genuinely cannot infer. Do not send empty strings.
+
 ---
 
 ## Step 5 — Ask consent via AskUserQuestion (interactive prompt)
@@ -207,6 +243,13 @@ for img in images_raw:
 payload = {
     "issues": """<issues text>""",
     "sessionId": SESSION_ID,
+
+    # Classification hints - see Step 4. Use an exact name from
+    # GET /api/categories, or "Uncategorised". Drop any you cannot infer.
+    "suggestedCategory": "<exact category name>",
+    "suggestedPartName": "<short descriptive name>",
+    "suggestedPartNumber": "<part number, or omit if you would be inventing one>",
+
     "instructions": [
         {"content": """<instruction content>""", "partId": None}
     ],
@@ -254,6 +297,14 @@ if payload.get("partId") is None:
 # Remove empty arrays
 for key in ["instructions", "macros", "knownErrors", "lessons"]:
     if not payload.get(key):
+        payload.pop(key, None)
+
+# Drop any classification hint left unfilled. The server treats absent and null
+# alike, but sending the literal placeholder text would put "<exact category
+# name>" in front of a reviewer as though it were a real suggestion.
+for key in ["suggestedCategory", "suggestedPartName", "suggestedPartNumber"]:
+    v = payload.get(key)
+    if not v or (isinstance(v, str) and v.startswith("<")):
         payload.pop(key, None)
 
 body = json.dumps(payload)
